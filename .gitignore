@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Testing / tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Market data
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Trained models
+models/*
+!models/.gitkeep
+
+# Generated reports
+reports/*
+!reports/.gitkeep
+
+# Local configuration / secrets
+.env
+.env.*
+*.secret
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

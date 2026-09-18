@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "market-entry-engine"
+version = "0.1.0"
+description = "Offline-first market entry research and recommendation engine"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "pandas",
+    "lightgbm",
+    "xgboost",
+    "scikit-learn",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
