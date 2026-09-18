@@ -16,6 +16,7 @@ def add_momentum_features(frame: pd.DataFrame) -> pd.DataFrame:
     result["candle_range"] = candle_range
     result["candle_body"] = candle_body
 
+    # Avoid division by zero for degenerate candles.
     valid_range = candle_range.ne(0)
 
     result["body_ratio"] = np.nan
@@ -50,7 +51,10 @@ def add_momentum_features(frame: pd.DataFrame) -> pd.DataFrame:
         / candle_range[valid_range]
     )
 
+    # Core momentum-candle hypothesis:
+    # body must be at least 80% of the total candle range.
     result["is_momentum_candle"] = result["body_ratio"] >= 0.80
+
     result["is_bullish"] = result["close"] > result["open"]
     result["is_bearish"] = result["close"] < result["open"]
 
@@ -97,9 +101,79 @@ def add_volatility_features(
     return result
 
 
+def add_ema_features(frame: pd.DataFrame) -> pd.DataFrame:
+    """Add EMA 5, 20, and 50 context features."""
+    result = frame.copy()
+
+    result["ema_5"] = result["close"].ewm(
+        span=5,
+        adjust=False,
+        min_periods=5,
+    ).mean()
+
+    result["ema_20"] = result["close"].ewm(
+        span=20,
+        adjust=False,
+        min_periods=20,
+    ).mean()
+
+    result["ema_50"] = result["close"].ewm(
+        span=50,
+        adjust=False,
+        min_periods=50,
+    ).mean()
+
+    # Distance between current price and each EMA.
+    result["price_vs_ema_5"] = (
+        result["close"] - result["ema_5"]
+    )
+
+    result["price_vs_ema_20"] = (
+        result["close"] - result["ema_20"]
+    )
+
+    result["price_vs_ema_50"] = (
+        result["close"] - result["ema_50"]
+    )
+
+    # EMA relationships.
+    result["ema_5_vs_20"] = (
+        result["ema_5"] - result["ema_20"]
+    )
+
+    result["ema_20_vs_50"] = (
+        result["ema_20"] - result["ema_50"]
+    )
+
+    # Alignment:
+    #  1 = bullish alignment: EMA5 > EMA20 > EMA50
+    # -1 = bearish alignment: EMA5 < EMA20 < EMA50
+    #  0 = mixed / not aligned
+    result["ema_alignment"] = np.select(
+        [
+            (
+                (result["ema_5"] > result["ema_20"])
+                & (result["ema_20"] > result["ema_50"])
+            ),
+            (
+                (result["ema_5"] < result["ema_20"])
+                & (result["ema_20"] < result["ema_50"])
+            ),
+        ],
+        [
+            1,
+            -1,
+        ],
+        default=0,
+    )
+
+    return result
+
+
 def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     """Build the current initial feature set."""
     result = add_momentum_features(frame)
     result = add_volatility_features(result)
+    result = add_ema_features(result)
 
     return result

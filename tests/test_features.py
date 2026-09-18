@@ -2,21 +2,22 @@ import numpy as np
 import pandas as pd
 
 from market_engine.features import (
+    add_ema_features,
     add_momentum_features,
     add_volatility_features,
     build_features,
 )
 
 
-def make_sample_frame() -> pd.DataFrame:
-    """Create a small deterministic OHLCV dataset for feature tests."""
+def make_sample_frame(rows: int = 60) -> pd.DataFrame:
+    """Create a deterministic OHLCV dataset for feature tests."""
     timestamps = pd.date_range(
         "2026-01-01 23:00:00",
-        periods=20,
+        periods=rows,
         freq="30min",
     )
 
-    close = np.arange(100.0, 120.0)
+    close = np.arange(100.0, 100.0 + rows)
 
     return pd.DataFrame(
         {
@@ -25,9 +26,9 @@ def make_sample_frame() -> pd.DataFrame:
             "high": close + 0.5,
             "low": close - 0.5,
             "close": close,
-            "tick_volume": np.arange(100, 120),
-            "real_volume": np.zeros(20),
-            "spread": np.full(20, 160),
+            "tick_volume": np.arange(100, 100 + rows),
+            "real_volume": np.zeros(rows),
+            "spread": np.full(rows, 160),
         }
     )
 
@@ -66,7 +67,9 @@ def test_momentum_features_calculate_body_ratio() -> None:
 def test_momentum_features_calculate_wicks_and_close_position() -> None:
     frame = pd.DataFrame(
         {
-            "timestamp": pd.to_datetime(["2026-01-01 23:00:00"]),
+            "timestamp": pd.to_datetime(
+                ["2026-01-01 23:00:00"]
+            ),
             "open": [100.0],
             "high": [110.0],
             "low": [90.0],
@@ -91,7 +94,9 @@ def test_momentum_features_calculate_wicks_and_close_position() -> None:
 def test_degenerate_candle_does_not_produce_invalid_ratios() -> None:
     frame = pd.DataFrame(
         {
-            "timestamp": pd.to_datetime(["2026-01-01 23:00:00"]),
+            "timestamp": pd.to_datetime(
+                ["2026-01-01 23:00:00"]
+            ),
             "open": [100.0],
             "high": [100.0],
             "low": [100.0],
@@ -114,6 +119,7 @@ def test_degenerate_candle_does_not_produce_invalid_ratios() -> None:
 
 def test_atr_uses_true_range_and_requires_history() -> None:
     frame = make_sample_frame()
+
     result = add_momentum_features(frame)
     result = add_volatility_features(result)
 
@@ -128,7 +134,69 @@ def test_atr_uses_true_range_and_requires_history() -> None:
     )
 
 
-def test_build_features_contains_initial_features() -> None:
+def test_ema_features_require_expected_history() -> None:
+    frame = make_sample_frame()
+
+    result = add_ema_features(frame)
+
+    assert result["ema_5"].iloc[:4].isna().all()
+    assert result["ema_5"].iloc[4:].notna().all()
+
+    assert result["ema_20"].iloc[:19].isna().all()
+    assert result["ema_20"].iloc[19:].notna().all()
+
+    assert result["ema_50"].iloc[:49].isna().all()
+    assert result["ema_50"].iloc[49:].notna().all()
+
+
+def test_ema_features_calculate_price_and_ema_relationships() -> None:
+    frame = make_sample_frame()
+
+    result = add_ema_features(frame)
+
+    row = 59
+
+    assert result.loc[row, "ema_5"] > 0
+    assert result.loc[row, "ema_20"] > 0
+    assert result.loc[row, "ema_50"] > 0
+
+    assert np.isclose(
+        result.loc[row, "price_vs_ema_5"],
+        result.loc[row, "close"] - result.loc[row, "ema_5"],
+    )
+
+    assert np.isclose(
+        result.loc[row, "price_vs_ema_20"],
+        result.loc[row, "close"] - result.loc[row, "ema_20"],
+    )
+
+    assert np.isclose(
+        result.loc[row, "price_vs_ema_50"],
+        result.loc[row, "close"] - result.loc[row, "ema_50"],
+    )
+
+    assert np.isclose(
+        result.loc[row, "ema_5_vs_20"],
+        result.loc[row, "ema_5"] - result.loc[row, "ema_20"],
+    )
+
+    assert np.isclose(
+        result.loc[row, "ema_20_vs_50"],
+        result.loc[row, "ema_20"] - result.loc[row, "ema_50"],
+    )
+
+
+def test_ema_alignment_is_bullish_for_rising_market() -> None:
+    frame = make_sample_frame()
+
+    result = add_ema_features(frame)
+
+    assert result.loc[59, "ema_5"] > result.loc[59, "ema_20"]
+    assert result.loc[59, "ema_20"] > result.loc[59, "ema_50"]
+    assert result.loc[59, "ema_alignment"] == 1
+
+
+def test_build_features_contains_initial_and_ema_features() -> None:
     frame = make_sample_frame()
 
     result = build_features(frame)
@@ -146,8 +214,16 @@ def test_build_features_contains_initial_features() -> None:
         "true_range",
         "atr_14",
         "range_to_atr",
+        "ema_5",
+        "ema_20",
+        "ema_50",
+        "price_vs_ema_5",
+        "price_vs_ema_20",
+        "price_vs_ema_50",
+        "ema_5_vs_20",
+        "ema_20_vs_50",
+        "ema_alignment",
     }
 
     assert expected_columns.issubset(result.columns)
     assert len(result) == len(frame)
-
