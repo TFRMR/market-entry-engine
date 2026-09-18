@@ -170,10 +170,94 @@ def add_ema_features(frame: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
+def add_support_resistance_features(
+    frame: pd.DataFrame,
+    short_window: int = 20,
+    long_window: int = 50,
+) -> pd.DataFrame:
+    """Add prior-window support/resistance context without look-ahead."""
+    if short_window <= 0:
+        raise ValueError("short_window must be greater than zero.")
+
+    if long_window <= 0:
+        raise ValueError("long_window must be greater than zero.")
+
+    if short_window >= long_window:
+        raise ValueError("short_window must be smaller than long_window.")
+
+    result = frame.copy()
+
+    # Shift by one candle first so the current candle is NEVER included
+    # when calculating prior support/resistance levels.
+    previous_high = result["high"].shift(1)
+    previous_low = result["low"].shift(1)
+
+    result["previous_high_20"] = previous_high.rolling(
+        window=short_window,
+        min_periods=short_window,
+    ).max()
+
+    result["previous_low_20"] = previous_low.rolling(
+        window=short_window,
+        min_periods=short_window,
+    ).min()
+
+    result["previous_high_50"] = previous_high.rolling(
+        window=long_window,
+        min_periods=long_window,
+    ).max()
+
+    result["previous_low_50"] = previous_low.rolling(
+        window=long_window,
+        min_periods=long_window,
+    ).min()
+
+    # Distance from current close to prior structural levels.
+    result["distance_to_high_20"] = (
+        result["previous_high_20"] - result["close"]
+    )
+
+    result["distance_to_low_20"] = (
+        result["close"] - result["previous_low_20"]
+    )
+
+    result["distance_to_high_50"] = (
+        result["previous_high_50"] - result["close"]
+    )
+
+    result["distance_to_low_50"] = (
+        result["close"] - result["previous_low_50"]
+    )
+
+    # Breakout flags.
+    # A bullish breakout occurs when the current high exceeds the
+    # highest high of the previous window.
+    # A bearish breakout occurs when the current low falls below the
+    # lowest low of the previous window.
+    result["breakout_above_20"] = (
+        result["high"] > result["previous_high_20"]
+    )
+
+    result["breakout_below_20"] = (
+        result["low"] < result["previous_low_20"]
+    )
+
+    result["breakout_above_50"] = (
+        result["high"] > result["previous_high_50"]
+    )
+
+    result["breakout_below_50"] = (
+        result["low"] < result["previous_low_50"]
+    )
+
+    return result
+
+
 def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     """Build the current initial feature set."""
     result = add_momentum_features(frame)
     result = add_volatility_features(result)
     result = add_ema_features(result)
+    result = add_support_resistance_features(result)
 
     return result

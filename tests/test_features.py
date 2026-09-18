@@ -1,9 +1,11 @@
 import numpy as np
 import pandas as pd
+import pytest
 
 from market_engine.features import (
     add_ema_features,
     add_momentum_features,
+    add_support_resistance_features,
     add_volatility_features,
     build_features,
 )
@@ -196,33 +198,138 @@ def test_ema_alignment_is_bullish_for_rising_market() -> None:
     assert result.loc[59, "ema_alignment"] == 1
 
 
-def test_build_features_contains_initial_and_ema_features() -> None:
+def test_support_resistance_requires_prior_history() -> None:
+    frame = make_sample_frame()
+
+    result = add_support_resistance_features(frame)
+
+    # Current candle must not be included.
+    # Therefore 20 previous candles are required before the first
+    # 20-candle level becomes available.
+    assert result["previous_high_20"].iloc[:20].isna().all()
+    assert result["previous_low_20"].iloc[:20].isna().all()
+
+    # Same principle for the 50-candle levels.
+    assert result["previous_high_50"].iloc[:50].isna().all()
+    assert result["previous_low_50"].iloc[:50].isna().all()
+
+    assert result["previous_high_20"].iloc[20:].notna().all()
+    assert result["previous_low_20"].iloc[20:].notna().all()
+
+    assert result["previous_high_50"].iloc[50:].notna().all()
+    assert result["previous_low_50"].iloc[50:].notna().all()
+
+
+def test_support_resistance_uses_only_previous_candles() -> None:
+    frame = make_sample_frame(rows=25)
+
+    result = add_support_resistance_features(
+        frame,
+        short_window=5,
+        long_window=10,
+    )
+
+    row = 10
+
+    expected_high_5 = frame["high"].iloc[row - 5:row].max()
+    expected_low_5 = frame["low"].iloc[row - 5:row].min()
+
+    expected_high_10 = frame["high"].iloc[row - 10:row].max()
+    expected_low_10 = frame["low"].iloc[row - 10:row].min()
+
+    assert result.loc[row, "previous_high_20"] == expected_high_5
+    assert result.loc[row, "previous_low_20"] == expected_low_5
+
+    assert result.loc[row, "previous_high_50"] == expected_high_10
+    assert result.loc[row, "previous_low_50"] == expected_low_10
+
+
+def test_support_resistance_does_not_leak_current_candle() -> None:
+    frame = make_sample_frame(rows=25)
+
+    # Make the current candle an extreme outlier.
+    row = 20
+    frame.loc[row, "high"] = 1000.0
+    frame.loc[row, "low"] = 1.0
+
+    result = add_support_resistance_features(
+        frame,
+        short_window=5,
+        long_window=10,
+    )
+
+    # The current extreme values must NOT appear in the prior levels.
+    assert result.loc[row, "previous_high_20"] < 1000.0
+    assert result.loc[row, "previous_low_20"] > 1.0
+
+    assert result.loc[row, "previous_high_50"] < 1000.0
+    assert result.loc[row, "previous_low_50"] > 1.0
+
+
+def test_support_resistance_breakout_flags() -> None:
+    frame = make_sample_frame(rows=25)
+
+    row = 20
+
+    previous_high = frame["high"].iloc[row - 5:row].max()
+    previous_low = frame["low"].iloc[row - 5:row].min()
+
+    frame.loc[row, "high"] = previous_high + 10.0
+    frame.loc[row, "low"] = previous_low - 10.0
+
+    result = add_support_resistance_features(
+        frame,
+        short_window=5,
+        long_window=10,
+    )
+
+    assert result.loc[row, "breakout_above_20"] == True
+    assert result.loc[row, "breakout_below_20"] == True
+
+
+def test_support_resistance_rejects_invalid_windows() -> None:
+    frame = make_sample_frame()
+
+    with pytest.raises(ValueError):
+        add_support_resistance_features(
+            frame,
+            short_window=0,
+            long_window=10,
+        )
+
+    with pytest.raises(ValueError):
+        add_support_resistance_features(
+            frame,
+            short_window=20,
+            long_window=20,
+        )
+
+    with pytest.raises(ValueError):
+        add_support_resistance_features(
+            frame,
+            short_window=30,
+            long_window=20,
+        )
+
+
+def test_build_features_contains_support_resistance_features() -> None:
     frame = make_sample_frame()
 
     result = build_features(frame)
 
     expected_columns = {
-        "candle_range",
-        "candle_body",
-        "body_ratio",
-        "upper_wick_ratio",
-        "lower_wick_ratio",
-        "close_position",
-        "is_momentum_candle",
-        "is_bullish",
-        "is_bearish",
-        "true_range",
-        "atr_14",
-        "range_to_atr",
-        "ema_5",
-        "ema_20",
-        "ema_50",
-        "price_vs_ema_5",
-        "price_vs_ema_20",
-        "price_vs_ema_50",
-        "ema_5_vs_20",
-        "ema_20_vs_50",
-        "ema_alignment",
+        "previous_high_20",
+        "previous_low_20",
+        "previous_high_50",
+        "previous_low_50",
+        "distance_to_high_20",
+        "distance_to_low_20",
+        "distance_to_high_50",
+        "distance_to_low_50",
+        "breakout_above_20",
+        "breakout_below_20",
+        "breakout_above_50",
+        "breakout_below_50",
     }
 
     assert expected_columns.issubset(result.columns)
