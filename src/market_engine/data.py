@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 
@@ -89,24 +90,17 @@ def validate_ohlcv(frame: pd.DataFrame) -> None:
 
     numeric = frame[["open", "high", "low", "close",
                      "tick_volume", "real_volume", "spread"]]
-    if not numeric.apply(lambda col: pd.api.types.is_numeric_dtype(col)).all():
+
+    if not all(
+        pd.api.types.is_numeric_dtype(numeric[column])
+        for column in numeric.columns
+    ):
         raise DataValidationError("Non-numeric market data found.")
 
-    if not numeric.apply(lambda col: pd.Series(col).map(pd.api.types.is_number).all()).all():
-        raise DataValidationError("Invalid numeric market data found.")
-
-    if not numeric.apply(lambda col: pd.Series(col).map(pd.api.types.is_number).all()).all():
-        raise DataValidationError("Invalid numeric market data found.")
+    if not np.isfinite(numeric.to_numpy(dtype=float)).all():
+        raise DataValidationError("Market data contains non-finite values.")
 
     prices = frame[["open", "high", "low", "close"]]
-    if not prices.apply(lambda col: pd.Series(col).map(pd.api.types.is_number).all()).all():
-        raise DataValidationError("OHLC contains non-numeric values.")
-
-    if not prices.apply(lambda col: pd.Series(col).map(pd.notna).all()).all():
-        raise DataValidationError("OHLC contains missing values.")
-
-    if not prices.apply(lambda col: pd.Series(col).map(pd.api.types.is_finite).all()).all():
-        raise DataValidationError("OHLC contains non-finite values.")
 
     if (prices <= 0).any().any():
         raise DataValidationError("Prices must be greater than zero.")

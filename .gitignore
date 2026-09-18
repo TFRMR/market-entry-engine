@@ -43,3 +43,5 @@ reports/*
 # OS
 .DS_Store
 Thumbs.db
+
+*.egg-info/
