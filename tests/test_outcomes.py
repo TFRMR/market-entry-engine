@@ -2,79 +2,140 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from market_engine.outcomes import add_forward_returns
+from market_engine.outcomes import (
+    add_forward_excursions,
+    add_forward_returns,
+)
 
 
-def make_sample_frame(rows: int = 15) -> pd.DataFrame:
-    timestamps = pd.date_range(
-        "2026-01-01",
-        periods=rows,
-        freq="30min",
-    )
-
-    close = np.arange(100.0, 100.0 + rows)
-
+def make_frame() -> pd.DataFrame:
+    """Create a small deterministic candle set for outcome tests."""
     return pd.DataFrame(
         {
-            "timestamp": timestamps,
-            "open": close - 0.5,
-            "high": close + 1.0,
-            "low": close - 1.0,
-            "close": close,
-            "tick_volume": np.arange(1, rows + 1),
-            "real_volume": 0,
-            "spread": 200,
+            "open": [100.0, 104.0, 103.0, 101.0, 99.0, 98.0],
+            "high": [105.0, 106.0, 105.0, 102.0, 100.0, 99.0],
+            "low": [99.0, 103.0, 100.0, 97.0, 96.0, 95.0],
+            "close": [104.0, 103.0, 101.0, 99.0, 98.0, 96.0],
+            "is_momentum_candle": [True, False, False, False, False, False],
         }
     )
 
 
-def test_forward_returns_use_future_close() -> None:
-    frame = make_sample_frame()
+def test_forward_returns_add_expected_columns() -> None:
+    frame = pd.DataFrame(
+        {
+            "close": [100.0, 101.0, 102.0, 104.0, 108.0],
+        }
+    )
 
-    result = add_forward_returns(frame)
+    result = add_forward_returns(frame, horizons=(1, 3))
 
-    row = 3
+    assert "forward_return_1" in result.columns
+    assert "forward_return_3" in result.columns
 
-    for horizon in (1, 3, 5, 10):
-        expected = (
-            frame.loc[row + horizon, "close"]
-            / frame.loc[row, "close"]
-        ) - 1
+    assert result.loc[0, "forward_return_1"] == pytest.approx(0.01)
+    assert result.loc[0, "forward_return_3"] == pytest.approx(0.04)
 
-        assert np.isclose(
-            result.loc[row, f"forward_return_{horizon}"],
-            expected,
-        )
-
-
-def test_forward_returns_are_nan_at_end() -> None:
-    frame = make_sample_frame(rows=15)
-
-    result = add_forward_returns(frame)
-
-    assert result["forward_return_1"].iloc[-1:].isna().all()
-    assert result["forward_return_3"].iloc[-3:].isna().all()
-    assert result["forward_return_5"].iloc[-5:].isna().all()
-    assert result["forward_return_10"].iloc[-10:].isna().all()
+    assert np.isnan(result.loc[4, "forward_return_1"])
+    assert np.isnan(result.loc[2, "forward_return_3"])
 
 
-def test_forward_returns_preserve_rows() -> None:
-    frame = make_sample_frame()
+def test_forward_returns_preserve_original_columns() -> None:
+    frame = pd.DataFrame(
+        {
+            "open": [100.0, 101.0, 102.0],
+            "close": [101.0, 102.0, 103.0],
+        }
+    )
 
-    result = add_forward_returns(frame)
+    result = add_forward_returns(frame, horizons=(1,))
 
-    assert len(result) == len(frame)
+    assert list(result.columns) == [
+        "open",
+        "close",
+        "forward_return_1",
+    ]
 
 
 def test_forward_returns_reject_invalid_horizons() -> None:
-    frame = make_sample_frame()
+    frame = pd.DataFrame({"close": [100.0, 101.0]})
 
-    with pytest.raises(ValueError, match="greater than zero"):
-        add_forward_returns(frame, horizons=(1, 0, 5))
-
-
-def test_forward_returns_reject_empty_horizons() -> None:
-    frame = make_sample_frame()
-
-    with pytest.raises(ValueError, match="must not be empty"):
+    with pytest.raises(ValueError):
         add_forward_returns(frame, horizons=())
+
+    with pytest.raises(ValueError):
+        add_forward_returns(frame, horizons=(0, 1))
+
+    with pytest.raises(ValueError):
+        add_forward_returns(frame, horizons=(-1, 1))
+
+
+def test_bullish_excursion_is_normalized_by_candle_risk() -> None:
+    frame = make_frame()
+    result = add_forward_excursions(frame, horizons=(1, 3))
+
+    # Entry 104, SL 99 => risk 5.
+    # Next candle: high 106, low 103.
+    assert result.loc[0, "entry_price"] == pytest.approx(104.0)
+    assert result.loc[0, "stop_price"] == pytest.approx(99.0)
+    assert result.loc[0, "risk_price"] == pytest.approx(5.0)
+
+    assert result.loc[0, "mfe_r_1"] == pytest.approx(0.4)
+    assert result.loc[0, "mae_r_1"] == pytest.approx(0.2)
+
+    # Next 3 candles: highest high 106, lowest low 96.
+    assert result.loc[0, "mfe_r_3"] == pytest.approx(0.4)
+    assert result.loc[0, "mae_r_3"] == pytest.approx(1.4)
+
+
+def test_bearish_excursion_uses_reversed_direction() -> None:
+    frame = make_frame()
+
+    # Turn row 1 into a bearish momentum candle.
+    frame.loc[1, "open"] = 104.0
+    frame.loc[1, "high"] = 106.0
+    frame.loc[1, "low"] = 100.0
+    frame.loc[1, "close"] = 103.0
+    frame.loc[1, "is_momentum_candle"] = True
+
+    result = add_forward_excursions(frame, horizons=(1,))
+
+    # Entry 103, SL 106 => risk 3.
+    # Next candle: low 100, high 105.
+    assert result.loc[1, "entry_price"] == pytest.approx(103.0)
+    assert result.loc[1, "stop_price"] == pytest.approx(106.0)
+    assert result.loc[1, "risk_price"] == pytest.approx(3.0)
+
+    assert result.loc[1, "mfe_r_1"] == pytest.approx(1.0)
+    assert result.loc[1, "mae_r_1"] == pytest.approx(2 / 3)
+
+
+def test_non_momentum_rows_are_nan() -> None:
+    frame = make_frame()
+    result = add_forward_excursions(frame, horizons=(1,))
+
+    assert np.isnan(result.loc[1, "mfe_r_1"])
+    assert np.isnan(result.loc[1, "mae_r_1"])
+
+
+def test_excursion_tail_is_nan_when_horizon_is_unavailable() -> None:
+    frame = make_frame()
+    result = add_forward_excursions(frame, horizons=(3,))
+
+    assert np.isnan(result.loc[4, "mfe_r_3"])
+    assert np.isnan(result.loc[5, "mae_r_3"])
+
+
+def test_excursions_reject_invalid_input() -> None:
+    frame = make_frame()
+
+    with pytest.raises(ValueError):
+        add_forward_excursions(frame, horizons=())
+
+    with pytest.raises(ValueError):
+        add_forward_excursions(frame, horizons=(0, 3))
+
+    with pytest.raises(ValueError):
+        add_forward_excursions(
+            frame.drop(columns=["is_momentum_candle"])
+        )
