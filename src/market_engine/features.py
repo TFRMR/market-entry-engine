@@ -237,5 +237,37 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     result = add_ema_features(result)
     result = add_support_resistance_features(result)
     result = add_recent_movement_features(result)
+    result = add_volume_features(result)
+
+    return result
+
+
+def add_volume_features(
+    frame: pd.DataFrame,
+    volume_window: int = 20,
+) -> pd.DataFrame:
+    """Add tick-volume context features."""
+    if volume_window <= 0:
+        raise ValueError("volume_window must be greater than zero.")
+
+    result = frame.copy()
+
+    previous_volume = result["tick_volume"].shift(1)
+
+    average_volume = previous_volume.rolling(
+        window=volume_window,
+        min_periods=volume_window,
+    ).mean()
+
+    result["volume_ratio_20"] = np.nan
+
+    valid_average = average_volume.gt(0)
+
+    result.loc[valid_average, "volume_ratio_20"] = (
+        result.loc[valid_average, "tick_volume"]
+        / average_volume[valid_average]
+    )
+
+    result["volume_change_1"] = result["tick_volume"].pct_change(periods=1)
 
     return result

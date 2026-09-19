@@ -6,6 +6,7 @@ from market_engine.features import (
     add_ema_features,
     add_momentum_features,
     add_recent_movement_features,
+    add_volume_features,
     add_support_resistance_features,
     add_volatility_features,
     build_features,
@@ -359,3 +360,52 @@ def test_build_features_contains_recent_movement_features() -> None:
 
     assert expected_columns.issubset(result.columns)
     assert len(result) == len(frame)
+
+
+def test_volume_features_calculate_context() -> None:
+    frame = make_sample_frame(rows=25)
+    frame["tick_volume"] = np.arange(1, 26, dtype=float)
+
+    result = add_volume_features(frame)
+
+    assert result["volume_ratio_20"].iloc[:20].isna().all()
+    assert result["volume_change_1"].iloc[:1].isna().all()
+
+    row = 20
+
+    expected_average = frame.loc[0:19, "tick_volume"].mean()
+    expected_ratio = frame.loc[row, "tick_volume"] / expected_average
+    expected_change = (
+        frame.loc[row, "tick_volume"] / frame.loc[row - 1, "tick_volume"]
+    ) - 1
+
+    assert np.isclose(
+        result.loc[row, "volume_ratio_20"],
+        expected_ratio,
+    )
+
+    assert np.isclose(
+        result.loc[row, "volume_change_1"],
+        expected_change,
+    )
+
+
+def test_build_features_contains_volume_features() -> None:
+    frame = make_sample_frame()
+
+    result = build_features(frame)
+
+    expected_columns = {
+        "volume_ratio_20",
+        "volume_change_1",
+    }
+
+    assert expected_columns.issubset(result.columns)
+    assert len(result) == len(frame)
+
+
+def test_volume_features_reject_invalid_window() -> None:
+    frame = make_sample_frame()
+
+    with pytest.raises(ValueError, match="volume_window"):
+        add_volume_features(frame, volume_window=0)
