@@ -237,7 +237,46 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     result = add_ema_features(result)
     result = add_support_resistance_features(result)
     result = add_recent_movement_features(result)
+    result = add_micro_structure_features(result)
     result = add_volume_features(result)
+
+    return result
+
+
+def add_micro_structure_features(frame: pd.DataFrame) -> pd.DataFrame:
+    """Add short-term price structure and range expansion features."""
+    result = frame.copy()
+
+    for window in (1, 2, 3):
+        previous_high = result["high"].shift(1).rolling(
+            window=window,
+            min_periods=window,
+        ).max()
+
+        previous_low = result["low"].shift(1).rolling(
+            window=window,
+            min_periods=window,
+        ).min()
+
+        result[f"high_vs_previous_high_{window}"] = (
+            result["high"] / previous_high - 1
+        )
+
+        result[f"low_vs_previous_low_{window}"] = (
+            result["low"] / previous_low - 1
+        )
+
+    candle_range = result["high"] - result["low"]
+
+    for window in (3, 5):
+        previous_average_range = candle_range.shift(1).rolling(
+            window=window,
+            min_periods=window,
+        ).mean()
+
+        result[f"range_vs_avg_{window}"] = (
+            candle_range / previous_average_range
+        )
 
     return result
 

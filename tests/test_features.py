@@ -4,6 +4,7 @@ import pytest
 
 from market_engine.features import (
     add_ema_features,
+    add_micro_structure_features,
     add_momentum_features,
     add_recent_movement_features,
     add_volume_features,
@@ -409,3 +410,49 @@ def test_volume_features_reject_invalid_window() -> None:
 
     with pytest.raises(ValueError, match="volume_window"):
         add_volume_features(frame, volume_window=0)
+
+
+def test_micro_structure_features_calculate_context() -> None:
+    frame = make_sample_frame(rows=10)
+
+    result = add_micro_structure_features(frame)
+
+    expected_columns = {
+        "high_vs_previous_high_1",
+        "high_vs_previous_high_2",
+        "high_vs_previous_high_3",
+        "low_vs_previous_low_1",
+        "low_vs_previous_low_2",
+        "low_vs_previous_low_3",
+        "range_vs_avg_3",
+        "range_vs_avg_5",
+    }
+
+    assert expected_columns.issubset(result.columns)
+    assert len(result) == len(frame)
+
+    assert result["high_vs_previous_high_1"].iloc[:1].isna().all()
+    assert result["high_vs_previous_high_2"].iloc[:2].isna().all()
+    assert result["high_vs_previous_high_3"].iloc[:3].isna().all()
+    assert result["range_vs_avg_3"].iloc[:3].isna().all()
+    assert result["range_vs_avg_5"].iloc[:5].isna().all()
+
+
+def test_build_features_contains_micro_structure_features() -> None:
+    frame = make_sample_frame()
+
+    result = build_features(frame)
+
+    expected_columns = {
+        "high_vs_previous_high_1",
+        "high_vs_previous_high_2",
+        "high_vs_previous_high_3",
+        "low_vs_previous_low_1",
+        "low_vs_previous_low_2",
+        "low_vs_previous_low_3",
+        "range_vs_avg_3",
+        "range_vs_avg_5",
+    }
+
+    assert expected_columns.issubset(result.columns)
+    assert len(result) == len(frame)
