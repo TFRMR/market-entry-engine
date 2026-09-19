@@ -3,6 +3,7 @@ import pandas as pd
 import pytest
 
 from market_engine.outcomes import (
+    add_barrier_outcomes,
     add_forward_excursions,
     add_forward_returns,
 )
@@ -139,3 +140,75 @@ def test_excursions_reject_invalid_input() -> None:
         add_forward_excursions(
             frame.drop(columns=["is_momentum_candle"])
         )
+
+
+def test_barrier_outcome_detects_bullish_tp_first() -> None:
+    frame = pd.DataFrame(
+        {
+            "open": [100.0, 104.0],
+            "high": [105.0, 110.0],
+            "low": [99.0, 103.0],
+            "close": [104.0, 109.0],
+            "is_momentum_candle": [True, False],
+        }
+    )
+
+    result = add_barrier_outcomes(
+        frame,
+        horizons=(1,),
+        targets_r=(1.0,),
+    )
+
+    assert result.loc[0, "barrier_1r_1"] == "TP_FIRST"
+
+
+def test_barrier_outcome_detects_bullish_sl_first() -> None:
+    frame = make_frame()
+
+    result = add_barrier_outcomes(
+        frame,
+        horizons=(3,),
+        targets_r=(2.0,),
+    )
+
+    assert result.loc[0, "barrier_2r_3"] == "SL_FIRST"
+
+
+def test_barrier_outcome_detects_both_same_candle() -> None:
+    frame = pd.DataFrame(
+        {
+            "open": [100.0, 100.0],
+            "high": [105.0, 110.0],
+            "low": [99.0, 98.0],
+            "close": [104.0, 100.0],
+            "is_momentum_candle": [True, False],
+        }
+    )
+
+    result = add_barrier_outcomes(
+        frame,
+        horizons=(1,),
+        targets_r=(1.0,),
+    )
+
+    assert result.loc[0, "barrier_1r_1"] == "BOTH_SAME_CANDLE"
+
+
+def test_barrier_outcome_requires_valid_directional_setup() -> None:
+    frame = pd.DataFrame(
+        {
+            "open": [100.0, 100.0],
+            "high": [100.0, 101.0],
+            "low": [100.0, 99.0],
+            "close": [100.0, 100.0],
+            "is_momentum_candle": [True, False],
+        }
+    )
+
+    result = add_barrier_outcomes(
+        frame,
+        horizons=(1,),
+        targets_r=(1.0,),
+    )
+
+    assert pd.isna(result.loc[0, "barrier_1r_1"])
