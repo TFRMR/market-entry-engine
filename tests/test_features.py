@@ -5,6 +5,7 @@ import pytest
 from market_engine.features import (
     add_ema_features,
     add_momentum_features,
+    add_recent_movement_features,
     add_support_resistance_features,
     add_volatility_features,
     build_features,
@@ -203,13 +204,9 @@ def test_support_resistance_requires_prior_history() -> None:
 
     result = add_support_resistance_features(frame)
 
-    # Current candle must not be included.
-    # Therefore 20 previous candles are required before the first
-    # 20-candle level becomes available.
     assert result["previous_high_20"].iloc[:20].isna().all()
     assert result["previous_low_20"].iloc[:20].isna().all()
 
-    # Same principle for the 50-candle levels.
     assert result["previous_high_50"].iloc[:50].isna().all()
     assert result["previous_low_50"].iloc[:50].isna().all()
 
@@ -247,7 +244,6 @@ def test_support_resistance_uses_only_previous_candles() -> None:
 def test_support_resistance_does_not_leak_current_candle() -> None:
     frame = make_sample_frame(rows=25)
 
-    # Make the current candle an extreme outlier.
     row = 20
     frame.loc[row, "high"] = 1000.0
     frame.loc[row, "low"] = 1.0
@@ -258,7 +254,6 @@ def test_support_resistance_does_not_leak_current_candle() -> None:
         long_window=10,
     )
 
-    # The current extreme values must NOT appear in the prior levels.
     assert result.loc[row, "previous_high_20"] < 1000.0
     assert result.loc[row, "previous_low_20"] > 1.0
 
@@ -312,24 +307,54 @@ def test_support_resistance_rejects_invalid_windows() -> None:
         )
 
 
-def test_build_features_contains_support_resistance_features() -> None:
+def test_recent_movement_features_calculate_returns() -> None:
+    frame = make_sample_frame(rows=20)
+
+    result = add_recent_movement_features(frame)
+
+    assert result["return_3"].iloc[:3].isna().all()
+    assert result["return_6"].iloc[:6].isna().all()
+    assert result["return_12"].iloc[:12].isna().all()
+
+    row = 12
+
+    expected_return_3 = (
+        frame.loc[row, "close"] / frame.loc[row - 3, "close"]
+    ) - 1
+
+    expected_return_6 = (
+        frame.loc[row, "close"] / frame.loc[row - 6, "close"]
+    ) - 1
+
+    expected_return_12 = (
+        frame.loc[row, "close"] / frame.loc[row - 12, "close"]
+    ) - 1
+
+    assert np.isclose(
+        result.loc[row, "return_3"],
+        expected_return_3,
+    )
+
+    assert np.isclose(
+        result.loc[row, "return_6"],
+        expected_return_6,
+    )
+
+    assert np.isclose(
+        result.loc[row, "return_12"],
+        expected_return_12,
+    )
+
+
+def test_build_features_contains_recent_movement_features() -> None:
     frame = make_sample_frame()
 
     result = build_features(frame)
 
     expected_columns = {
-        "previous_high_20",
-        "previous_low_20",
-        "previous_high_50",
-        "previous_low_50",
-        "distance_to_high_20",
-        "distance_to_low_20",
-        "distance_to_high_50",
-        "distance_to_low_50",
-        "breakout_above_20",
-        "breakout_below_20",
-        "breakout_above_50",
-        "breakout_below_50",
+        "return_3",
+        "return_6",
+        "return_12",
     }
 
     assert expected_columns.issubset(result.columns)

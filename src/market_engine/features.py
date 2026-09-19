@@ -16,7 +16,6 @@ def add_momentum_features(frame: pd.DataFrame) -> pd.DataFrame:
     result["candle_range"] = candle_range
     result["candle_body"] = candle_body
 
-    # Avoid division by zero for degenerate candles.
     valid_range = candle_range.ne(0)
 
     result["body_ratio"] = np.nan
@@ -51,10 +50,7 @@ def add_momentum_features(frame: pd.DataFrame) -> pd.DataFrame:
         / candle_range[valid_range]
     )
 
-    # Core momentum-candle hypothesis:
-    # body must be at least 80% of the total candle range.
     result["is_momentum_candle"] = result["body_ratio"] >= 0.80
-
     result["is_bullish"] = result["close"] > result["open"]
     result["is_bearish"] = result["close"] < result["open"]
 
@@ -123,32 +119,13 @@ def add_ema_features(frame: pd.DataFrame) -> pd.DataFrame:
         min_periods=50,
     ).mean()
 
-    # Distance between current price and each EMA.
-    result["price_vs_ema_5"] = (
-        result["close"] - result["ema_5"]
-    )
+    result["price_vs_ema_5"] = result["close"] - result["ema_5"]
+    result["price_vs_ema_20"] = result["close"] - result["ema_20"]
+    result["price_vs_ema_50"] = result["close"] - result["ema_50"]
 
-    result["price_vs_ema_20"] = (
-        result["close"] - result["ema_20"]
-    )
+    result["ema_5_vs_20"] = result["ema_5"] - result["ema_20"]
+    result["ema_20_vs_50"] = result["ema_20"] - result["ema_50"]
 
-    result["price_vs_ema_50"] = (
-        result["close"] - result["ema_50"]
-    )
-
-    # EMA relationships.
-    result["ema_5_vs_20"] = (
-        result["ema_5"] - result["ema_20"]
-    )
-
-    result["ema_20_vs_50"] = (
-        result["ema_20"] - result["ema_50"]
-    )
-
-    # Alignment:
-    #  1 = bullish alignment: EMA5 > EMA20 > EMA50
-    # -1 = bearish alignment: EMA5 < EMA20 < EMA50
-    #  0 = mixed / not aligned
     result["ema_alignment"] = np.select(
         [
             (
@@ -160,10 +137,7 @@ def add_ema_features(frame: pd.DataFrame) -> pd.DataFrame:
                 & (result["ema_20"] < result["ema_50"])
             ),
         ],
-        [
-            1,
-            -1,
-        ],
+        [1, -1],
         default=0,
     )
 
@@ -187,8 +161,6 @@ def add_support_resistance_features(
 
     result = frame.copy()
 
-    # Shift by one candle first so the current candle is NEVER included
-    # when calculating prior support/resistance levels.
     previous_high = result["high"].shift(1)
     previous_low = result["low"].shift(1)
 
@@ -212,7 +184,6 @@ def add_support_resistance_features(
         min_periods=long_window,
     ).min()
 
-    # Distance from current close to prior structural levels.
     result["distance_to_high_20"] = (
         result["previous_high_20"] - result["close"]
     )
@@ -229,11 +200,6 @@ def add_support_resistance_features(
         result["close"] - result["previous_low_50"]
     )
 
-    # Breakout flags.
-    # A bullish breakout occurs when the current high exceeds the
-    # highest high of the previous window.
-    # A bearish breakout occurs when the current low falls below the
-    # lowest low of the previous window.
     result["breakout_above_20"] = (
         result["high"] > result["previous_high_20"]
     )
@@ -253,11 +219,23 @@ def add_support_resistance_features(
     return result
 
 
+def add_recent_movement_features(frame: pd.DataFrame) -> pd.DataFrame:
+    """Add recent price-return context features."""
+    result = frame.copy()
+
+    result["return_3"] = result["close"].pct_change(periods=3)
+    result["return_6"] = result["close"].pct_change(periods=6)
+    result["return_12"] = result["close"].pct_change(periods=12)
+
+    return result
+
+
 def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     """Build the current initial feature set."""
     result = add_momentum_features(frame)
     result = add_volatility_features(result)
     result = add_ema_features(result)
     result = add_support_resistance_features(result)
+    result = add_recent_movement_features(result)
 
     return result
