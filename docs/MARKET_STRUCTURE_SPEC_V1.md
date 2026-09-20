@@ -1,6 +1,6 @@
 # Market Structure Specification v1
 
-Status: LOCKED — brainstorming baseline  
+Status: LOCKED — brainstorming baseline  \
 Scope: deterministic market-structure engine for the Market Entry Engine
 
 ## 1. Core hierarchy
@@ -87,13 +87,48 @@ If the active pullback is broken in the same direction:
 
 Only ONE relevant pullback needs to be broken to validate the associated swing. Earlier pullbacks do not all have to be broken.
 
-## 7. Valid swing
+## 7. Valid swing and associated extreme
 
 A swing becomes valid only after the corresponding pullback has been broken by a reversal.
 
+The **associated extreme** is the extreme point of the directional leg that produced that pullback.
+
+Therefore:
+
+### Swing high
+
+```
+directional leg UP
+       ↓
+  EXTREME HIGH
+       ↓
+   PULLBACK LOW
+       ↓
+reversal breaks PULLBACK LOW
+       ↓
+EXTREME HIGH = SWING HIGH VALID
+```
+
+### Swing low
+
+```
+directional leg DOWN
+       ↓
+   EXTREME LOW
+       ↓
+  PULLBACK HIGH
+       ↓
+reversal breaks PULLBACK HIGH
+       ↓
+EXTREME LOW = SWING LOW VALID
+```
+
+The break point itself is NOT the swing point. The extreme that produced the confirmed pullback is the swing point.
+
 Important:
 - The swing is considered known at the time the confirming break occurs.
-- Historical visualization may show the resulting swing at its associated extreme, but training/event data must preserve the actual confirmation time to avoid look-ahead bias.
+- Historical visualization may place the resulting swing marker at its associated extreme.
+- Training/event data must preserve the actual confirmation time to avoid look-ahead bias.
 
 ## 8. Valid structure
 
@@ -165,13 +200,12 @@ This is intended to make the structure engine deterministic and reproducible.
 The following must be formalized and tested before implementation:
 
 1. Exact recursive reference behavior for nested INSIDE/OUTSIDE sequences.
-2. Exact mapping from a confirmed pullback to its associated extreme.
-3. Replacement/update behavior when a candidate is extended before confirmation.
-4. Ordering when one candle breaks multiple pullbacks or structural levels simultaneously.
-5. Exact reset/rebuild rules after a valid swing is broken.
-6. Minimum information needed to initialize the first external structure.
-7. Exact event ordering for simultaneous UP/DOWN breaks.
-8. As-of-time representation so no future-confirmed swing leaks into historical model features.
+2. Replacement/update behavior when a candidate is extended before confirmation.
+3. Ordering when one candle breaks multiple pullbacks or structural levels simultaneously.
+4. Exact reset/rebuild rules after a valid swing is broken.
+5. Minimum information needed to initialize the first external structure.
+6. Exact event ordering for simultaneous UP/DOWN breaks.
+7. As-of-time representation so no future-confirmed swing leaks into historical model features.
 
 ## 13. Planned validation sequence
 
