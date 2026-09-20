@@ -199,6 +199,40 @@ def test_process_from_first_bos_returns_none_without_bos():
     assert process_from_first_bos(candles) is None
 
 
+def test_process_from_first_bos_matches_full_run_after_anchor():
+    candles = [
+        StructuralCandle(0, "00:00", 12, 9, 10, 11, CandleKind.UP),
+        StructuralCandle(1, "00:30", 14, 10, 11, 13, CandleKind.UP),
+        StructuralCandle(2, "01:00", 14.5, 11, 13, 14, CandleKind.UP),
+        StructuralCandle(3, "01:30", 13.5, 10, 13, 11, CandleKind.DOWN),
+        StructuralCandle(4, "02:00", 13, 8, 11, 9, CandleKind.DOWN),
+        StructuralCandle(5, "02:30", 12, 9, 9, 11, CandleKind.UP),
+        StructuralCandle(6, "03:00", 15, 11, 11, 14, CandleKind.UP),
+        StructuralCandle(7, "03:30", 16, 12, 14, 15, CandleKind.UP),
+        StructuralCandle(8, "04:00", 15, 10, 15, 11, CandleKind.DOWN),
+        StructuralCandle(9, "04:30", 14, 9, 11, 10, CandleKind.DOWN),
+        StructuralCandle(10, "05:00", 13, 8, 10, 9, CandleKind.DOWN),
+    ]
+
+    full_swings, full_events = process_structural_candles(candles)
+    anchored = process_from_first_bos(candles)
+
+    assert anchored is not None
+    anchor, anchored_swings, anchored_events = anchored
+
+    assert anchored_events == [
+        event for event in full_events if event.index > anchor.index
+    ]
+
+    expected_swings = [
+        swing
+        for swing in full_swings
+        if swing.index == anchor.swing_index
+        or swing.confirmation_index > anchor.index
+    ]
+    assert anchored_swings == expected_swings
+
+
 def test_process_from_first_bos_preserves_broken_swing_context():
     candles = [
         StructuralCandle(0, "2026-01-01 00:00", 12, 9, 10, 11, CandleKind.UP),
