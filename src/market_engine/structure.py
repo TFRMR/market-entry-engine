@@ -207,25 +207,45 @@ def _process_structural_candles(
         external_low = checkpoint.external_low
 
     for candle in candles:
+        high_target = (
+            external_high
+            if external_high is not None
+            and candle.index > external_high.confirmation_index
+            and candle.high > external_high.price
+            and broken_high_index != external_high.index
+            else last_high
+        )
         bos_high = (
-            last_high
-            if last_high is not None
-            and candle.index > last_high.confirmation_index
-            and candle.high > last_high.price
-            and broken_high_index != last_high.index
+            high_target
+            if high_target is not None
+            and candle.index > high_target.confirmation_index
+            and candle.high > high_target.price
+            and broken_high_index != high_target.index
             else None
         )
 
+        low_target = (
+            external_low
+            if external_low is not None
+            and candle.index > external_low.confirmation_index
+            and candle.low < external_low.price
+            and broken_low_index != external_low.index
+            else last_low
+        )
         bos_low = (
-            last_low
-            if last_low is not None
-            and candle.index > last_low.confirmation_index
-            and candle.low < last_low.price
-            and broken_low_index != last_low.index
+            low_target
+            if low_target is not None
+            and candle.index > low_target.confirmation_index
+            and candle.low < low_target.price
+            and broken_low_index != low_target.index
             else None
         )
 
         first_bos = bos_high is not None or bos_low is not None
+        external_boundary_broken = (
+            (bos_high is not None and bos_high.scope is StructureScope.EXTERNAL)
+            or (bos_low is not None and bos_low.scope is StructureScope.EXTERNAL)
+        )
 
         if bos_high is not None:
             events.append(
@@ -255,6 +275,21 @@ def _process_structural_candles(
             )
             broken_low_index = bos_low.index
 
+        if external_boundary_broken and not (
+            first_bos and stop_after_first_bos
+        ):
+            # The broken outer range is closed. Do not let its old internal
+            # swings become targets in the rebuilt structure.
+            last_high = None
+            last_low = None
+            broken_high_index = None
+            broken_low_index = None
+            external_high = None
+            external_low = None
+            state.last_swing = None
+            state.previous_swing = None
+            state.scope = StructureScope.EXTERNAL
+
         if state.direction is None:
             if candle.kind is CandleKind.UP:
                 state.direction = Direction.UP
@@ -276,6 +311,8 @@ def _process_structural_candles(
                     last_low=last_low,
                     broken_high_index=broken_high_index,
                     broken_low_index=broken_low_index,
+                    external_high=external_high,
+                    external_low=external_low,
                 )
                 return swings, events, checkpoint_out
 
