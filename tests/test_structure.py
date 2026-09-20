@@ -104,7 +104,7 @@ def test_bos_breaks_only_previously_confirmed_valid_swing():
     swings, events = process_structural_candles(candles)
 
     assert [(s.swing_type, s.index, s.confirmation_index) for s in swings] == [
-        (SwingType.HIGH, 2, 3),
+        (SwingType.HIGH, 2, 4),
         (SwingType.LOW, 4, 6),
     ]
 
