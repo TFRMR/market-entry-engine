@@ -1,6 +1,6 @@
 # Target and Exit Specification v1
 
-Status: DRAFT — methodology baseline
+Status: **CONTRACT BASELINE**
 Scope: historical targets for direction, exit areas, and invalidation
 
 ## 1. Separation of responsibilities
@@ -29,14 +29,17 @@ The exact horizon and excursion rules must be locked during label validation and
 
 Exit areas are historical outcome targets derived from levels that are observable from the decision-time context.
 
-Candidate sources include:
+Version 1 implements one deterministic source: **confirmed valid swings**.
 
-- next valid swing;
-- next structure boundary;
-- liquidity level;
-- FVG boundary;
-- OB boundary;
-- support/resistance level.
+For a LONG candidate, eligible exit areas are confirmed valid swing highs above
+entry. For a SHORT candidate, eligible exit areas are confirmed valid swing lows
+below entry.
+
+Levels confirmed after the setup candle are excluded. This keeps exit-area
+construction causal at setup time.
+
+Later versions may add structure boundaries, liquidity, FVG, OB, or
+support/resistance as separate source types.
 
 A candidate target must have:
 
@@ -47,6 +50,10 @@ A candidate target must have:
 - distance normalized by ATR.
 
 ## 4. Exit Area 1 / Area 2
+
+Version 1 orders eligible swing levels by absolute distance from the candidate
+entry and exposes at most two nearest areas. The source metadata and original
+confirmation timestamp are retained.
 
 The model may forecast reachability for two ordered target areas:
 
