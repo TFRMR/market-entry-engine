@@ -164,28 +164,38 @@ def _confirm_swing(
     )
 
 
-def process_structural_candles(
+def _process_structural_candles(
     candles: Iterable[StructuralCandle],
-) -> tuple[list[ValidSwing], list[StructureEvent]]:
-    """Run deterministic pullback -> valid-swing validation.
-
-    A directional leg owns one active extreme. A candle that extends that
-    extreme invalidates the previous pullback candidate and starts a new leg
-    reference. A non-extending candle creates the active pullback candidate.
-    The next opposing break of that candidate validates the historical extreme
-    as a swing. Confirmation is timestamped at the breaking candle.
-    """
+    checkpoint: StructureCheckpoint | None = None,
+    stop_after_first_bos: bool = False,
+) -> tuple[
+    list[ValidSwing],
+    list[StructureEvent],
+    StructureCheckpoint | None,
+]:
     state = StructureState()
     swings: list[ValidSwing] = []
     events: list[StructureEvent] = []
+
     last_high: ValidSwing | None = None
     last_low: ValidSwing | None = None
     broken_high_index: int | None = None
     broken_low_index: int | None = None
 
+    if checkpoint is not None:
+        state.direction = checkpoint.direction
+        state.extreme = checkpoint.extreme
+        state.pullback = checkpoint.pullback
+        state.last_swing = checkpoint.last_swing
+        state.previous_swing = checkpoint.previous_swing
+        state.scope = checkpoint.scope
+
+        last_high = checkpoint.last_high
+        last_low = checkpoint.last_low
+        broken_high_index = checkpoint.broken_high_index
+        broken_low_index = checkpoint.broken_low_index
+
     for candle in candles:
-        # Snapshot valid swings before processing this candle. A swing that is
-        # confirmed on this candle is not itself eligible to be a BOS target.
         bos_high = (
             last_high
             if last_high is not None
@@ -194,6 +204,7 @@ def process_structural_candles(
             and broken_high_index != last_high.index
             else None
         )
+
         bos_low = (
             last_low
             if last_low is not None
@@ -202,6 +213,8 @@ def process_structural_candles(
             and broken_low_index != last_low.index
             else None
         )
+
+        first_bos = bos_high is not None or bos_low is not None
 
         if bos_high is not None:
             events.append(
@@ -236,6 +249,23 @@ def process_structural_candles(
             elif candle.kind is CandleKind.DOWN:
                 state.direction = Direction.DOWN
                 state.extreme = candle
+
+            if first_bos and stop_after_first_bos:
+                checkpoint_out = StructureCheckpoint(
+                    index=candle.index,
+                    direction=state.direction,
+                    extreme=state.extreme,
+                    pullback=state.pullback,
+                    last_swing=state.last_swing,
+                    previous_swing=state.previous_swing,
+                    scope=state.scope,
+                    last_high=last_high,
+                    last_low=last_low,
+                    broken_high_index=broken_high_index,
+                    broken_low_index=broken_low_index,
+                )
+                return swings, events, checkpoint_out
+
             continue
 
         assert state.extreme is not None
@@ -244,9 +274,7 @@ def process_structural_candles(
             if candle.high > state.extreme.high:
                 state.extreme = candle
                 state.pullback = None
-                continue
-
-            if state.pullback is None:
+            elif state.pullback is None:
                 state.pullback = PullbackCandidate(
                     index=candle.index,
                     timestamp=candle.timestamp,
@@ -255,10 +283,13 @@ def process_structural_candles(
                     extreme_index=state.extreme.index,
                     extreme_price=state.extreme.high,
                 )
-                continue
-
-            if candle.low < state.pullback.price:
-                swing = _confirm_swing(state, candle, SwingType.HIGH, last_high)
+            elif candle.low < state.pullback.price:
+                swing = _confirm_swing(
+                    state,
+                    candle,
+                    SwingType.HIGH,
+                    last_high,
+                )
                 state.previous_swing = state.last_swing
                 state.last_swing = swing
                 last_high = swing
@@ -276,9 +307,7 @@ def process_structural_candles(
                 state.direction = Direction.DOWN
                 state.extreme = candle
                 state.pullback = None
-                continue
-
-            if candle.low > state.pullback.price:
+            elif candle.low > state.pullback.price:
                 state.pullback = PullbackCandidate(
                     index=candle.index,
                     timestamp=candle.timestamp,
@@ -292,9 +321,7 @@ def process_structural_candles(
             if candle.low < state.extreme.low:
                 state.extreme = candle
                 state.pullback = None
-                continue
-
-            if state.pullback is None:
+            elif state.pullback is None:
                 state.pullback = PullbackCandidate(
                     index=candle.index,
                     timestamp=candle.timestamp,
@@ -303,10 +330,13 @@ def process_structural_candles(
                     extreme_index=state.extreme.index,
                     extreme_price=state.extreme.low,
                 )
-                continue
-
-            if candle.high > state.pullback.price:
-                swing = _confirm_swing(state, candle, SwingType.LOW, last_low)
+            elif candle.high > state.pullback.price:
+                swing = _confirm_swing(
+                    state,
+                    candle,
+                    SwingType.LOW,
+                    last_low,
+                )
                 state.previous_swing = state.last_swing
                 state.last_swing = swing
                 last_low = swing
@@ -324,9 +354,7 @@ def process_structural_candles(
                 state.direction = Direction.UP
                 state.extreme = candle
                 state.pullback = None
-                continue
-
-            if candle.high < state.pullback.price:
+            elif candle.high < state.pullback.price:
                 state.pullback = PullbackCandidate(
                     index=candle.index,
                     timestamp=candle.timestamp,
@@ -336,8 +364,103 @@ def process_structural_candles(
                     extreme_price=state.extreme.low,
                 )
 
+        if first_bos and stop_after_first_bos:
+            checkpoint_out = StructureCheckpoint(
+                index=candle.index,
+                direction=state.direction,
+                extreme=state.extreme,
+                pullback=state.pullback,
+                last_swing=state.last_swing,
+                previous_swing=state.previous_swing,
+                scope=state.scope,
+                last_high=last_high,
+                last_low=last_low,
+                broken_high_index=broken_high_index,
+                broken_low_index=broken_low_index,
+            )
+            return swings, events, checkpoint_out
+
+    return swings, events, None
+
+
+def process_structural_candles(
+    candles: Iterable[StructuralCandle],
+) -> tuple[list[ValidSwing], list[StructureEvent]]:
+    """Run deterministic market structure across the supplied candles."""
+    swings, events, _ = _process_structural_candles(candles)
     return swings, events
 
+
+def find_first_bos(candles):
+    _, events, _ = _process_structural_candles(
+        candles,
+        stop_after_first_bos=True,
+    )
+
+    for event in events:
+        if event.event.endswith("_BOS"):
+            return event
+
+    return None
+
+
+def find_first_bos_checkpoint(candles):
+    """Process history until the first BOS and return its actual state."""
+    swings, events, checkpoint = _process_structural_candles(
+        candles,
+        stop_after_first_bos=True,
+    )
+
+    anchor = next(
+        (event for event in events if event.event.endswith("_BOS")),
+        None,
+    )
+
+    if anchor is None or checkpoint is None:
+        return None
+
+    return anchor, checkpoint, swings
+
+
+def process_from_first_bos(candles):
+    result = find_first_bos_checkpoint(candles)
+
+    if result is None:
+        return None
+
+    anchor, checkpoint, historical_swings = result
+
+    candle_list = list(candles)
+    forward_candles = [
+        candle
+        for candle in candle_list
+        if candle.index > checkpoint.index
+    ]
+
+    future_swings, future_events, _ = _process_structural_candles(
+        forward_candles,
+        checkpoint=checkpoint,
+    )
+
+    context_swings = [
+        swing
+        for swing in historical_swings
+        if swing.index == anchor.swing_index
+        or swing.confirmation_index >= anchor.index
+    ]
+    context_swings.extend(
+        swing
+        for swing in future_swings
+        if swing.confirmation_index > anchor.index
+    )
+
+    forward_events = [
+        event
+        for event in future_events
+        if event.index > anchor.index
+    ]
+
+    return anchor, context_swings, forward_events
 
 def build_structural_sequence(frame: pd.DataFrame) -> list[StructuralCandle]:
     """Reduce raw OHLCV to structural candles using inside/outside semantics."""
