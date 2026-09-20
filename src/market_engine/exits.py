@@ -5,7 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from market_engine.entry import SetupCandidate
-from market_engine.structure import Direction, SwingType, ValidSwing
+from market_engine.structure import (
+    Direction,
+    StructureEvent,
+    SwingType,
+    ValidSwing,
+)
 
 
 @dataclass(frozen=True)
@@ -20,12 +25,21 @@ class ExitArea:
 def build_exit_areas(
     candidate: SetupCandidate,
     swings: list[ValidSwing],
+    events: list[StructureEvent] | None = None,
 ) -> list[ExitArea]:
-    """Return confirmed future structural levels beyond the entry price."""
+    """Return confirmed, unbroken structural levels beyond the entry price."""
     candidates: list[ExitArea] = []
 
     for swing in swings:
-        if swing.confirmation_index > candidate.setup_index:
+        if swing.confirmation_index >= candidate.setup_index:
+            continue
+
+        if events and any(
+            event.event.endswith("_BOS")
+            and event.swing_index == swing.index
+            and event.index <= candidate.setup_index
+            for event in events
+        ):
             continue
 
         if candidate.direction is Direction.UP:
