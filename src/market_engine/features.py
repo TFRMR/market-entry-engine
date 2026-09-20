@@ -10,6 +10,7 @@ from market_engine.structure import (
     SwingType,
     build_structural_sequence,
     process_structural_candles,
+    process_structural_candles_with_context,
 )
 
 
@@ -247,6 +248,7 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     result = add_micro_structure_features(result)
     result = add_volume_features(result)
     result = add_structure_event_features(result)
+    result = add_active_structure_features(result)
 
     return result
 
@@ -364,6 +366,53 @@ def add_structure_event_features(frame: pd.DataFrame) -> pd.DataFrame:
             if swing.label == label:
                 values[swing.confirmation_index] = 1
         result[f"structure_{label.lower()}"] = values
+
+    return result
+
+
+def add_active_structure_features(frame: pd.DataFrame) -> pd.DataFrame:
+    """Add active structural direction, distances, and event ages."""
+    result = frame.copy()
+    structural = build_structural_sequence(result)
+    _, _, snapshots = process_structural_candles_with_context(structural)
+
+    direction = pd.Series(np.nan, index=result.index, dtype=float)
+    last_high = pd.Series(np.nan, index=result.index, dtype=float)
+    last_low = pd.Series(np.nan, index=result.index, dtype=float)
+    last_swing_index = pd.Series(np.nan, index=result.index, dtype=float)
+    last_bos_index = pd.Series(np.nan, index=result.index, dtype=float)
+
+    direction_code = {
+        None: np.nan,
+        "UP": 1.0,
+        "DOWN": -1.0,
+    }
+
+    for snapshot in snapshots:
+        position = snapshot.index
+        if position < 0 or position >= len(result):
+            raise ValueError("Structure snapshot index is outside the feature frame.")
+
+        direction.iloc[position] = direction_code[snapshot.direction.value if snapshot.direction else None]
+        if snapshot.last_high is not None:
+            last_high.iloc[position] = snapshot.last_high.price
+        if snapshot.last_low is not None:
+            last_low.iloc[position] = snapshot.last_low.price
+        if snapshot.last_swing_confirmation_index is not None:
+            last_swing_index.iloc[position] = snapshot.last_swing_confirmation_index
+        if snapshot.last_bos_index is not None:
+            last_bos_index.iloc[position] = snapshot.last_bos_index
+
+    result["structure_direction"] = direction.ffill().fillna(0)
+    result["structure_distance_to_high"] = last_high.ffill() - result["close"]
+    result["structure_distance_to_low"] = result["close"] - last_low.ffill()
+
+    last_swing_index = last_swing_index.ffill()
+    last_bos_index = last_bos_index.ffill()
+    current_index = pd.Series(result.index, index=result.index, dtype=float)
+
+    result["structure_bars_since_last_swing"] = current_index - last_swing_index
+    result["structure_bars_since_last_bos"] = current_index - last_bos_index
 
     return result
 
