@@ -616,7 +616,6 @@ def process_from_first_bos(candles):
         swing
         for swing in historical_swings
         if swing.index == anchor.swing_index
-        or swing.confirmation_index >= anchor.index
     ]
     context_swings.extend(
         swing
