@@ -2,6 +2,8 @@ import pandas as pd
 
 from market_engine.structure import (
     ValidSwing,
+    StructureCheckpoint,
+    StructureScope,
     _label_swing,
     CandleKind,
     Direction,
@@ -443,3 +445,55 @@ def test_process_from_first_bos_preserves_future_swing_confirmation_time():
     for swing in future_swings:
         assert swing.confirmation_index > anchor.index
 
+
+
+def test_first_bos_checkpoint_preserves_structure_context():
+    candles = [
+        StructuralCandle(0, "00:00", 12, 9, 10, 11, CandleKind.UP),
+        StructuralCandle(1, "00:30", 14, 10, 11, 13, CandleKind.UP),
+        StructuralCandle(2, "01:00", 14.5, 11, 13, 14, CandleKind.UP),
+        StructuralCandle(3, "01:30", 13.5, 10, 13, 11, CandleKind.DOWN),
+        StructuralCandle(4, "02:00", 13, 8, 11, 9, CandleKind.DOWN),
+        StructuralCandle(5, "02:30", 20, 9, 9, 11, CandleKind.UP),
+    ]
+
+    anchor = find_first_bos(candles)
+
+    assert anchor is not None
+    assert anchor.event == "BULLISH_BOS"
+    assert anchor.index == 5
+    assert anchor.direction is Direction.UP
+    assert anchor.swing_index == 2
+    assert anchor.swing_price == 14.5
+
+
+def test_structure_checkpoint_starts_after_anchor_candle():
+    checkpoint = StructureCheckpoint(
+        index=5,
+        direction=Direction.UP,
+        extreme=StructuralCandle(
+            5, "02:30", 20, 9, 9, 11, CandleKind.UP
+        ),
+        pullback=None,
+        last_swing=ValidSwing(
+            index=2,
+            timestamp="01:00",
+            price=14.5,
+            swing_type=SwingType.HIGH,
+            confirmation_index=4,
+            confirmation_timestamp="02:00",
+        ),
+        previous_swing=None,
+        scope=StructureScope.EXTERNAL,
+        last_high=None,
+        last_low=None,
+        broken_high_index=2,
+        broken_low_index=None,
+    )
+
+    assert checkpoint.index == 5
+    assert checkpoint.direction is Direction.UP
+    assert checkpoint.extreme.index == 5
+    assert checkpoint.last_swing.index == 2
+    assert checkpoint.last_swing.confirmation_index == 4
+    assert checkpoint.broken_high_index == 2

@@ -90,6 +90,21 @@ class StructureState:
     scope: StructureScope = StructureScope.EXTERNAL
 
 
+@dataclass(frozen=True)
+class StructureCheckpoint:
+    index: int
+    direction: Direction
+    extreme: StructuralCandle
+    pullback: PullbackCandidate | None
+    last_swing: ValidSwing | None
+    previous_swing: ValidSwing | None
+    scope: StructureScope
+    last_high: ValidSwing | None
+    last_low: ValidSwing | None
+    broken_high_index: int | None
+    broken_low_index: int | None
+
+
 def classify_structural_candle(
     current: pd.Series,
     reference: pd.Series,
