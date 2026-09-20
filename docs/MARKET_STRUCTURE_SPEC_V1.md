@@ -57,7 +57,39 @@ An outside candle breaks both structural sides and represents/replaces candles c
 
 When an OUTSIDE candle extends the active directional extreme while also crossing the active pullback, the extreme extension takes precedence: the old pullback does not validate the prior extreme on that candle. The directional leg continues from the new extreme.
 
-Nested inside/outside reference behavior still requires explicit edge-case specification before implementation.
+### Nested reference rule
+
+The structural reference is always the **latest accepted structural candle**:
+
+- The first candle establishes the initial reference.
+- An INSIDE candle is ignored for structural counting and **does not replace the reference**.
+- An UP, DOWN, or OUTSIDE candle is accepted and **replaces the reference**.
+- Therefore, any number of consecutive INSIDE candles remain nested under the same last structural reference.
+- When the next non-INSIDE candle arrives, its high/low is compared against that last accepted structural reference, not against the most recent raw/inside candle.
+- If that candle is OUTSIDE, it becomes the new reference; subsequent INSIDE candles are then nested inside that OUTSIDE range until another non-INSIDE candle replaces it.
+- No hidden/raw candle inside the current structural range becomes a secondary reference.
+
+This makes the reduction deterministic:
+
+```
+S0 → I1 → I2 → I3 → S1
+          ↓
+compare S1 against S0
+          ↓
+S1 becomes new reference
+```
+
+and:
+
+```
+S0 → I1 → OUT1 → I2 → I3 → S1
+             ↓
+       OUT1 is reference
+             ↓
+       S1 compares to OUT1
+```
+
+The rule is recursive by replacement: **inside preserves the current reference; non-inside replaces it**.
 
 ## 5. Pullback / swing candidate
 
@@ -299,8 +331,7 @@ This scope model is structural: no arbitrary price-distance, candle-count, or vo
 
 The following remain before Market Structure v1 is considered complete:
 
-1. Exact recursive reference behavior for nested INSIDE/OUTSIDE sequences.
-2. Exact event ordering for simultaneous structural transitions beyond the currently locked OUTSIDE/extreme-extension rule.
+1. Exact event ordering for simultaneous structural transitions beyond the currently locked OUTSIDE/extreme-extension rule.
 
 Already resolved in the current implementation:
 
@@ -314,6 +345,7 @@ Already resolved in the current implementation:
 - valid swings inside an established external high/low range are classified INTERNAL;
 - external swing candidates update the corresponding external boundary;
 - external-boundary break/rebuild behavior is implemented and validated by the focused regression test.
+- nested INSIDE/OUTSIDE reference behavior is now locked: INSIDE preserves the latest structural reference; every non-INSIDE candle replaces it.
 
 ## 14. Planned validation sequence
 
