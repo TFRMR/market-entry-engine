@@ -114,3 +114,22 @@ def test_bos_breaks_only_previously_confirmed_valid_swing():
     assert bos[0].direction is Direction.UP
     assert bos[0].swing_index == 2
     assert bos[0].index == 6
+
+def test_first_bos_is_the_initial_structure_anchor():
+    candles = [
+        StructuralCandle(0, "2026-01-01 00:00", 12, 9, 10, 11, CandleKind.UP),
+        StructuralCandle(1, "2026-01-01 00:30", 14, 10, 11, 13, CandleKind.UP),
+        StructuralCandle(2, "2026-01-01 01:00", 14.5, 11, 13, 14, CandleKind.UP),
+        StructuralCandle(3, "2026-01-01 01:30", 13.5, 10, 13, 11, CandleKind.DOWN),
+        StructuralCandle(4, "2026-01-01 02:00", 13, 8, 11, 9, CandleKind.DOWN),
+        StructuralCandle(5, "2026-01-01 02:30", 12, 9, 9, 11, CandleKind.UP),
+        StructuralCandle(6, "2026-01-01 03:00", 15, 11, 11, 14, CandleKind.UP),
+    ]
+
+    swings, events = process_structural_candles(candles)
+    bos = [event for event in events if event.event.endswith("_BOS")]
+
+    assert bos
+    assert bos[0].event == "BULLISH_BOS"
+    assert bos[0].index == 6
+    assert bos[0].direction is Direction.UP
