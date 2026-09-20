@@ -55,6 +55,8 @@ low_current  < low_reference
 
 An outside candle breaks both structural sides and represents/replaces candles contained within its range for structural counting.
 
+When an OUTSIDE candle extends the active directional extreme while also crossing the active pullback, the extreme extension takes precedence: the old pullback does not validate the prior extreme on that candle. The directional leg continues from the new extreme.
+
 Nested inside/outside reference behavior still requires explicit edge-case specification before implementation.
 
 ## 5. Pullback / swing candidate
@@ -289,7 +291,7 @@ The following remain before Market Structure v1 is considered complete:
 1. Exact recursive reference behavior for nested INSIDE/OUTSIDE sequences.
 2. Exact reset/rebuild rules after an external boundary is broken.
 3. Internal versus external scope transitions.
-4. Exact event ordering for simultaneous structural transitions.
+4. Exact event ordering for simultaneous structural transitions beyond the currently locked OUTSIDE/extreme-extension rule.
 
 Already resolved in the current implementation:
 
@@ -319,4 +321,4 @@ Candle validity
 → External boundary break / rebuild
 ```
 
-This document is the locked implementation baseline for the deterministic Market Structure layer.
+This document is the implementation baseline for the deterministic Market Structure layer. Core rules marked above are locked; the remaining items in section 13 must be resolved before Market Structure v1 is closed.
