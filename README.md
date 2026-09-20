@@ -44,8 +44,31 @@ with supporting information such as:
 
 Early development.
 
-The project does not currently claim profitability or suitability
-for live trading.
+### Current engineering position
+
+The deterministic Market Structure layer is being built before context,
+machine learning, and entry optimization.
+
+Completed and locked:
+
+- structural candle classification
+- inside / outside candle handling
+- directional legs
+- pullback candidates and validation
+- valid swing generation
+- HH / HL / LH / LL labels from valid swings
+- BOS from confirmed valid swings
+- swing confirmation-time handling for no-look-ahead processing
+- first BOS structural anchoring
+- StructureCheckpoint and forward continuation
+
+Current next step:
+
+- internal / external structure
+- external-boundary break and structure rebuild
+
+The project is deliberately keeping market structure deterministic before
+adding contextual features or ML models.
 
 ## Design Principles
 
@@ -58,16 +81,38 @@ for live trading.
 
 ## Roadmap
 
-- [ ] M0 - Project foundation
-- [ ] M1 - Data pipeline
-- [ ] M2 - Feature engineering
-- [ ] M3 - Labeling
-- [ ] M4 - LightGBM baseline
-- [ ] M5 - XGBoost baseline
-- [ ] M6 - Validation
-- [ ] M7 - Backtesting
-- [ ] M8 - Entry engine
-- [ ] M9 - Paper / Shadow trading
+### Deterministic market structure
+
+- [x] Data foundation and reproducible raw dataset
+- [x] Structural candle classification
+- [x] Inside / outside semantics
+- [x] Pullback validation
+- [x] Valid swing confirmation
+- [x] HH / HL / LH / LL
+- [x] BOS from confirmed valid swings
+- [x] First BOS warm-up / structural anchor
+- [x] StructureCheckpoint / forward continuation
+- [ ] Internal / external structure
+- [ ] External boundary break / rebuild
+- [ ] Close Market Structure v1 specification
+
+### Context and entry engine
+
+- [ ] Market context features
+- [ ] Setup definition
+- [ ] Entry / invalidation / target logic
+- [ ] Execution cost model
+- [ ] Deterministic baseline
+
+### Statistical / ML evaluation
+
+- [ ] Label generation
+- [ ] Time-series validation
+- [ ] LightGBM baseline
+- [ ] XGBoost baseline
+- [ ] Out-of-sample evaluation
+- [ ] Backtesting
+- [ ] Paper / Shadow trading
 
 ## Disclaimer
 
