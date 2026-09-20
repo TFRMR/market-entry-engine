@@ -63,6 +63,9 @@ Nested inside/outside reference behavior still requires explicit edge-case speci
 - A candidate is not automatically a swing.
 - A failed/unconfirmed pullback must not become a canonical structure node.
 - Multiple pullbacks may occur inside one directional leg.
+- Pullbacks are **not canonical market-structure nodes**.
+- A pullback's role is to act as a **validator for a future swing** and as an **inducement/reference point** for reversal validation.
+- Creating, extending, or failing a pullback does not by itself create a new HH/HL/LH/LL node or a new canonical zig-zag in market structure.
 
 Conceptually:
 
@@ -70,7 +73,7 @@ Conceptually:
 P1 → P2 → P3 → P4
 ```
 
-can all be pullbacks without producing four swings.
+can all be pullbacks while the canonical market structure remains a straight directional leg.
 
 ## 6. Active pullback validation
 
@@ -81,9 +84,10 @@ If the active pullback is broken in the opposing direction:
 - its associated extreme becomes a SWING VALID.
 
 If the active pullback is broken in the same direction:
-- that candidate fails;
+- that candidate fails as a validator for the current extreme;
 - the directional leg continues;
-- a newer pullback candidate may become active.
+- a newer pullback candidate may become active;
+- the canonical market structure remains the same directional leg.
 
 Only ONE relevant pullback needs to be broken to validate the associated swing. Earlier pullbacks do not all have to be broken.
 
@@ -185,6 +189,8 @@ No arbitrary price-distance threshold is required to define internal structure; 
 
 The engine must not create zig-zag structure merely because a chart visually contains corners.
 
+Pullbacks are auxiliary validation/reference objects, not canonical structure nodes.
+
 Until a pullback is confirmed:
 
 ```
@@ -193,19 +199,24 @@ NO VALID SWING
 → NO CANONICAL STRUCTURE NODE
 ```
 
-This is intended to make the structure engine deterministic and reproducible.
+Even when a directional leg contains many pullbacks:
+
+```
+EXTREME → P1 → P2 → P3 → P4
+```
+
+the canonical market structure remains a straight leg until an active pullback is broken in the opposing direction and the associated extreme becomes a valid swing.
 
 ## 12. Explicit unresolved items before coding
 
 The following must be formalized and tested before implementation:
 
 1. Exact recursive reference behavior for nested INSIDE/OUTSIDE sequences.
-2. Replacement/update behavior when a candidate is extended before confirmation.
-3. Ordering when one candle breaks multiple pullbacks or structural levels simultaneously.
-4. Exact reset/rebuild rules after a valid swing is broken.
-5. Minimum information needed to initialize the first external structure.
-6. Exact event ordering for simultaneous UP/DOWN breaks.
-7. As-of-time representation so no future-confirmed swing leaks into historical model features.
+2. Ordering when one candle breaks multiple pullbacks or structural levels simultaneously.
+3. Exact reset/rebuild rules after a valid swing is broken.
+4. Minimum information needed to initialize the first external structure.
+5. Exact event ordering for simultaneous UP/DOWN breaks.
+6. As-of-time representation so no future-confirmed swing leaks into historical model features.
 
 ## 13. Planned validation sequence
 
