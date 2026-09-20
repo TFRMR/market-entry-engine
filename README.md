@@ -137,3 +137,15 @@ The first-BOS checkpoint is defined as a post-candle state. If the first BOS
 also closes an external boundary, the boundary rebuild is applied before the
 checkpoint is emitted. Forward continuation from that checkpoint must produce
 the same post-anchor events and confirmed swings as the uninterrupted full run.
+
+### Quality gate
+
+The current development quality gate is:
+
+- `ruff check .`
+- `pytest -q`
+
+Ruff covers the engine and test suite. Exploratory audit scripts under
+`scripts/audit_*.py` are intentionally excluded from the production lint scope.
+
+Current checkpoint: **Ruff clean, 71 tests passing**.

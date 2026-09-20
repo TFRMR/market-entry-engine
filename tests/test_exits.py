@@ -94,28 +94,3 @@ def test_exit_areas_exclude_already_broken_swings():
     assert [area.price for area in areas] == [108.0]
 
 
-def test_exit_areas_exclude_same_candle_confirmation():
-    areas = build_exit_areas(
-        candidate(Direction.UP),
-        [swing(2, 106, SwingType.HIGH, 5), swing(3, 108, SwingType.HIGH, 4)],
-    )
-    assert [area.price for area in areas] == [108.0]
-
-
-def test_exit_areas_exclude_already_broken_swings():
-    areas = build_exit_areas(
-        candidate(Direction.UP),
-        [swing(2, 106, SwingType.HIGH, 2), swing(3, 108, SwingType.HIGH, 3)],
-        events=[
-            StructureEvent(
-                index=4,
-                timestamp=4,
-                event="BULLISH_BOS",
-                direction=Direction.UP,
-                swing_index=2,
-                swing_price=106.0,
-                scope=StructureScope.EXTERNAL,
-            )
-        ],
-    )
-    assert [area.price for area in areas] == [108.0]

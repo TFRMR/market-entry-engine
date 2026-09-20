@@ -27,3 +27,4 @@ where = ["src"]
 
 [tool.ruff]
 line-length = 100
+extend-exclude = ["scripts/audit_*.py"]

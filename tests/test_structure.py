@@ -1,18 +1,18 @@
 import pandas as pd
 
 from market_engine.structure import (
-    ValidSwing,
-    StructureCheckpoint,
-    StructureScope,
-    _label_swing,
     CandleKind,
     Direction,
-    SwingType,
     StructuralCandle,
+    StructureCheckpoint,
+    StructureScope,
+    SwingType,
+    ValidSwing,
+    _label_swing,
     build_structural_sequence,
-    process_structural_candles,
     find_first_bos,
     process_from_first_bos,
+    process_structural_candles,
 )
 
 
@@ -130,7 +130,7 @@ def test_first_bos_is_the_initial_structure_anchor():
         StructuralCandle(6, "2026-01-01 03:00", 15, 11, 11, 14, CandleKind.UP),
     ]
 
-    swings, events = process_structural_candles(candles)
+    _, events = process_structural_candles(candles)
     bos = [event for event in events if event.event.endswith("_BOS")]
 
     assert bos
@@ -263,7 +263,7 @@ def test_process_from_first_bos_preserves_broken_swing_context():
     result = process_from_first_bos(candles)
     assert result is not None
 
-    _, swings, events = result
+    _, swings, _ = result
 
     # The anchor's broken swing is historical context,
     # so it must remain available to the anchored structure.
@@ -368,7 +368,7 @@ def test_outside_candle_can_break_both_confirmed_swings():
         StructuralCandle(7, "2026-01-01 03:30", 10, 7, 14, 8, CandleKind.OUTSIDE),
     ]
 
-    swings, events = process_structural_candles(candles)
+    _, events = process_structural_candles(candles)
 
     bos = [event for event in events if event.event.endswith("_BOS")]
 
@@ -451,7 +451,7 @@ def test_process_from_first_bos_continues_structure_from_anchor_direction():
 
     assert result is not None
 
-    anchor, swings, events = result
+    anchor, swings, _ = result
 
     assert anchor.event == "BULLISH_BOS"
     assert anchor.direction is Direction.UP
@@ -600,7 +600,7 @@ def test_external_boundary_break_rebuilds_from_new_boundary():
         StructuralCandle(14, "07:00", 11, 8, 10, 9, CandleKind.DOWN),
     ]
 
-    swings, events = process_structural_candles(candles)
+    _, events = process_structural_candles(candles)
 
     boundary_bos = [
         event
