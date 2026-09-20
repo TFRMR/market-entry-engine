@@ -122,6 +122,7 @@ def _confirm_swing(
     state: StructureState,
     candle: StructuralCandle,
     swing_type: SwingType,
+    previous_same_type: ValidSwing | None,
 ) -> ValidSwing:
     assert state.extreme is not None
     swing = ValidSwing(
@@ -143,7 +144,7 @@ def _confirm_swing(
         swing_type=swing.swing_type,
         confirmation_index=swing.confirmation_index,
         confirmation_timestamp=swing.confirmation_timestamp,
-        label=_label_swing(swing, state.last_swing),
+        label=_label_swing(swing, previous_same_type),
     )
 
 
@@ -161,6 +162,8 @@ def process_structural_candles(
     state = StructureState()
     swings: list[ValidSwing] = []
     events: list[StructureEvent] = []
+    last_high: ValidSwing | None = None
+    last_low: ValidSwing | None = None
 
     for candle in candles:
         if state.direction is None:
@@ -192,9 +195,10 @@ def process_structural_candles(
                 continue
 
             if candle.low < state.pullback.price:
-                swing = _confirm_swing(state, candle, SwingType.HIGH)
+                swing = _confirm_swing(state, candle, SwingType.HIGH, last_high)
                 state.previous_swing = state.last_swing
                 state.last_swing = swing
+                last_high = swing
                 swings.append(swing)
                 events.append(
                     StructureEvent(
@@ -239,9 +243,10 @@ def process_structural_candles(
                 continue
 
             if candle.high > state.pullback.price:
-                swing = _confirm_swing(state, candle, SwingType.LOW)
+                swing = _confirm_swing(state, candle, SwingType.LOW, last_low)
                 state.previous_swing = state.last_swing
                 state.last_swing = swing
+                last_low = swing
                 swings.append(swing)
                 events.append(
                     StructureEvent(
