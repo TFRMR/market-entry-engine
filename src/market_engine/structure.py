@@ -513,38 +513,3 @@ def build_structural_sequence(frame: pd.DataFrame) -> list[StructuralCandle]:
     return result
 
 
-def find_first_bos(candles):
-    _, events = process_structural_candles(candles)
-
-    for event in events:
-        if event.event.endswith("_BOS"):
-            return event
-
-    return None
-
-
-
-
-
-def process_from_first_bos(candles):
-    anchor = find_first_bos(candles)
-
-    if anchor is None:
-        return None
-
-    swings, all_events = process_structural_candles(candles)
-
-    context_swings = [
-        swing
-        for swing in swings
-        if swing.index == anchor.swing_index
-        or swing.confirmation_index >= anchor.index
-    ]
-
-    forward_events = [
-        event
-        for event in all_events
-        if event.index >= anchor.index
-    ]
-
-    return anchor, context_swings, forward_events
