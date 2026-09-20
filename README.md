@@ -70,9 +70,8 @@ Completed and locked:
 
 Current next step:
 
-- implement setup candidates from confirmed BOS
-- implement next-candle-open entry timing
-- implement fixed structural invalidation and candidate-level risk
+- implement target / exit-area semantics
+- implement execution-cost model
 - keep execution costs explicit and separate from structural facts
 
 The project deliberately keeps deterministic structure and feature contracts
