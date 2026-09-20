@@ -84,21 +84,16 @@ A non-positive risk distance is rejected rather than repaired by moving the stop
 
 ## 7. Target
 
-Version 1 uses a configurable fixed-R target.
+Version 1 does not hard-code a fixed price or fixed-R target into the setup
+candidate. Target construction belongs to the target/exit layer and must use
+only levels observable at the decision time.
 
-Default baseline:
-target_R = 2.0
+The candidate therefore carries entry and invalidation semantics first. A later
+risk/exit layer may attach one or more deterministic exit areas and calculate
+R:R from the proposed entry and invalidation.
 
-For LONG:
-target = entry_price + risk * target_R
-
-For SHORT:
-target = entry_price - risk * target_R
-
-The target is fixed at candidate creation.
-
-The target policy is deliberately isolated from structure so alternative target
-policies can be evaluated later without changing setup semantics.
+A fixed-R target may be used as an explicit experimental policy, but it is not
+part of the structural setup contract.
 
 ## 8. Execution costs
 
