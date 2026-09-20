@@ -376,6 +376,30 @@ def test_outside_candle_can_break_both_confirmed_swings_same_candle():
     ]
 
 
+def test_simultaneous_bos_events_have_deterministic_order():
+    candles = [
+        StructuralCandle(0, "00:00", 12, 9, 10, 11, CandleKind.UP),
+        StructuralCandle(1, "00:30", 14, 10, 11, 13, CandleKind.UP),
+        StructuralCandle(2, "01:00", 14.5, 11, 13, 14, CandleKind.UP),
+        StructuralCandle(3, "01:30", 13.5, 10, 13, 11, CandleKind.DOWN),
+        StructuralCandle(4, "02:00", 13, 8, 11, 9, CandleKind.DOWN),
+        StructuralCandle(5, "02:30", 10, 9, 9, 9.5, CandleKind.DOWN),
+        StructuralCandle(6, "03:00", 11, 8.5, 9, 10.5, CandleKind.DOWN),
+        StructuralCandle(7, "03:30", 16, 7, 10, 14, CandleKind.OUTSIDE),
+    ]
+
+    _, events = process_structural_candles(candles)
+
+    simultaneous = [event for event in events if event.index == 7]
+    assert [
+        (event.event, event.swing_index)
+        for event in simultaneous
+    ] == [
+        ("BULLISH_BOS", 2),
+        ("BEARISH_BOS", 4),
+    ]
+
+
 def test_process_from_first_bos_continues_structure_from_anchor_direction():
     candles = [
         StructuralCandle(0, "00:00", 12, 9, 10, 11, CandleKind.UP),
