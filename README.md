@@ -46,7 +46,7 @@ Early development.
 
 ### Current engineering position
 
-The deterministic Market Structure layer is being built before context,
+The deterministic Market Structure v1 layer is locked before context,
 machine learning, and entry optimization.
 
 Completed and locked:
@@ -61,14 +61,18 @@ Completed and locked:
 - swing confirmation-time handling for no-look-ahead processing
 - first BOS structural anchoring
 - StructureCheckpoint and forward continuation
+- internal / external structure scope
+- external-boundary break and structure rebuild
+- deterministic simultaneous-event ordering
+- confirmation-time structure feature contract
 
 Current next step:
 
-- internal / external structure
-- external-boundary break and structure rebuild
+- expand the structure feature representation into model-ready context
+- define setup, invalidation, target, and execution-cost semantics
 
-The project is deliberately keeping market structure deterministic before
-adding contextual features or ML models.
+The project deliberately keeps deterministic structure and feature contracts
+ahead of statistical modeling and entry optimization.
 
 ## Design Principles
 
