@@ -1,6 +1,6 @@
 # Market Structure Specification v1
 
-Status: LOCKED — internal/external scope baseline  \
+Status: IMPLEMENTATION BASELINE — internal/external scope classification implemented  \
 Scope: deterministic market-structure engine for the Market Entry Engine
 
 ## 1. Core hierarchy
@@ -311,7 +311,9 @@ Already resolved in the current implementation:
 - future-confirmed swings are unavailable before confirmation;
 - BOS targets only previously confirmed valid swings;
 - internal/external scope is determined by the active structural boundary;
-- external-boundary breaks terminate the prior external context and trigger forward rebuild without retroactive promotion.
+- valid swings inside an established external high/low range are classified INTERNAL;
+- external swing candidates update the corresponding external boundary;
+- external-boundary break/rebuild behavior remains to be implemented and validated.
 
 ## 14. Planned validation sequence
 
@@ -331,6 +333,7 @@ Candle validity
 → Internal structure
 → External boundary break / rebuild
 → scope transition validation
+→ external boundary rebuild
 ```
 
 This document is the implementation baseline for the deterministic Market Structure layer. Core rules marked above are locked. Internal/external scope and external-boundary rebuild are now locked as the next implementation contract; only the remaining section 13 items must be resolved before Market Structure v1 is closed.
