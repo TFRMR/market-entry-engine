@@ -320,4 +320,3 @@ def build_structural_sequence(frame: pd.DataFrame) -> list[StructuralCandle]:
         reference = row
 
     return result
-"
