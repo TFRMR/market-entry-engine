@@ -3,7 +3,8 @@
 The engine processes candles in chronological order and emits only information
 that is knowable at the current candle. Pullbacks are validator/reference
 objects; valid swings are created only when the active pullback is broken by
-a reversal.
+a reversal. A BOS event is emitted only when a previously confirmed valid swing
+is broken.
 """
 
 from __future__ import annotations
@@ -164,8 +165,55 @@ def process_structural_candles(
     events: list[StructureEvent] = []
     last_high: ValidSwing | None = None
     last_low: ValidSwing | None = None
+    broken_high_index: int | None = None
+    broken_low_index: int | None = None
 
     for candle in candles:
+        # Snapshot valid swings before processing this candle. A swing that is
+        # confirmed on this candle is not itself eligible to be a BOS target.
+        bos_high = (
+            last_high
+            if last_high is not None
+            and candle.index > last_high.confirmation_index
+            and candle.high > last_high.price
+            and broken_high_index != last_high.index
+            else None
+        )
+        bos_low = (
+            last_low
+            if last_low is not None
+            and candle.index > last_low.confirmation_index
+            and candle.low < last_low.price
+            and broken_low_index != last_low.index
+            else None
+        )
+
+        if bos_high is not None:
+            events.append(
+                StructureEvent(
+                    index=candle.index,
+                    timestamp=candle.timestamp,
+                    event="BULLISH_BOS",
+                    direction=Direction.UP,
+                    swing_index=bos_high.index,
+                    swing_price=bos_high.price,
+                )
+            )
+            broken_high_index = bos_high.index
+
+        if bos_low is not None:
+            events.append(
+                StructureEvent(
+                    index=candle.index,
+                    timestamp=candle.timestamp,
+                    event="BEARISH_BOS",
+                    direction=Direction.DOWN,
+                    swing_index=bos_low.index,
+                    swing_price=bos_low.price,
+                )
+            )
+            broken_low_index = bos_low.index
+
         if state.direction is None:
             if candle.kind is CandleKind.UP:
                 state.direction = Direction.UP

@@ -6,6 +6,7 @@ from market_engine.structure import (
     CandleKind,
     Direction,
     SwingType,
+    StructuralCandle,
     build_structural_sequence,
     process_structural_candles,
 )
@@ -88,3 +89,28 @@ def test_valid_swing_labels_compare_previous_same_type():
 
     assert _label_swing(higher_high, previous_high) == "HH"
     assert _label_swing(lower_high, previous_high) == "LH"
+
+def test_bos_breaks_only_previously_confirmed_valid_swing():
+    candles = [
+        StructuralCandle(0, "2026-01-01 00:00", 12, 9, 10, 11, CandleKind.UP),
+        StructuralCandle(1, "2026-01-01 00:30", 14, 10, 11, 13, CandleKind.UP),
+        StructuralCandle(2, "2026-01-01 01:00", 14.5, 11, 13, 14, CandleKind.UP),
+        StructuralCandle(3, "2026-01-01 01:30", 13.5, 10, 13, 11, CandleKind.DOWN),
+        StructuralCandle(4, "2026-01-01 02:00", 13, 8, 11, 9, CandleKind.DOWN),
+        StructuralCandle(5, "2026-01-01 02:30", 12, 9, 9, 11, CandleKind.UP),
+        StructuralCandle(6, "2026-01-01 03:00", 15, 11, 11, 14, CandleKind.UP),
+    ]
+
+    swings, events = process_structural_candles(candles)
+
+    assert [(s.swing_type, s.index, s.confirmation_index) for s in swings] == [
+        (SwingType.HIGH, 2, 3),
+        (SwingType.LOW, 4, 6),
+    ]
+
+    bos = [e for e in events if e.event.endswith("_BOS")]
+    assert len(bos) == 1
+    assert bos[0].event == "BULLISH_BOS"
+    assert bos[0].direction is Direction.UP
+    assert bos[0].swing_index == 2
+    assert bos[0].index == 6
