@@ -108,7 +108,8 @@ ahead of statistical modeling and entry optimization.
 - [x] Market context features
 - [x] Setup definition
 - [x] Setup / entry / invalidation semantics
-- [ ] Target / exit-area model
+- [x] Target / exit-area model
+- [ ] Execution cost model
 - [ ] Execution cost model
 - [ ] Deterministic execution baseline
 
