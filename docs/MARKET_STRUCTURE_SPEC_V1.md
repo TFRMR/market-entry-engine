@@ -1,6 +1,6 @@
 # Market Structure Specification v1
 
-Status: LOCKED — brainstorming baseline  \
+Status: LOCKED — implementation baseline  \
 Scope: deterministic market-structure engine for the Market Entry Engine
 
 ## 1. Core hierarchy
@@ -164,11 +164,106 @@ Examples:
 
 These labels are derived from valid swing relationships, not rolling highs/lows.
 
-## 10. Internal and external structure
+## 10. BOS — Break of Structure
+
+BOS is a break of an already confirmed valid swing.
+
+### Bullish BOS
+
+```
+VALID SWING HIGH
+       ↓
+price breaks swing high
+       ↓
+BULLISH_BOS
+```
+
+### Bearish BOS
+
+```
+VALID SWING LOW
+       ↓
+price breaks swing low
+       ↓
+BEARISH_BOS
+```
+
+Rules:
+
+- A pullback break is NOT a BOS. It validates the associated swing.
+- A swing must already be confirmed before it can become a BOS target.
+- A swing confirmed on the current candle is not eligible as a BOS target on that same candle.
+- Wick breaks are sufficient.
+- An OUTSIDE candle may legitimately produce both bullish and bearish BOS events when it breaks two previously confirmed valid swings.
+- BOS targets confirmed structure, not merely candle color or current leg direction.
+
+Historical swing location is distinct from information availability:
+
+```
+swing historical location
+        ≠
+swing confirmation time
+```
+
+The engine must use confirmation time for event/features so future-confirmed structure cannot leak into historical processing.
+
+## 11. First BOS and structure initialization
+
+Historical candles are used as warm-up/context to establish the first usable structural anchor.
+
+The engine must not define structure using an arbitrary fixed candle count.
+
+```
+RAW HISTORY
+    ↓
+STRUCTURAL CANDLES
+    ↓
+VALID SWINGS
+    ↓
+FIRST CONFIRMED BOS
+    ↓
+STRUCTURE CHECKPOINT
+    ↓
+FORWARD PROCESSING
+```
+
+`StructureCheckpoint` represents the engine state immediately after the BOS candle has been processed.
+
+It preserves:
+
+```
+StructureCheckpoint
+├── index
+├── direction
+├── extreme
+├── pullback
+├── last_swing
+├── previous_swing
+├── scope
+├── last_high
+├── last_low
+├── broken_high_index
+└── broken_low_index
+```
+
+This enables:
+
+```
+PASS 1
+historical warm-up
+→ first BOS
+→ checkpoint
+
+PASS 2
+candle after BOS
+→ continue structure
+```
+
+The checkpoint is an engine state boundary, not a new market-structure concept.
+
+## 12. Internal and external structure
 
 Internal structure can form inside an existing larger external boundary.
-
-Example concept:
 
 ```
 External: HH ───────────────┐
@@ -179,46 +274,33 @@ External: HH ───────────────┐
 External: HL ───────────────┘
 ```
 
-Valid swings and structure events that occur inside the external HH/HL boundary are internal structure.
+Valid swings and structure events inside the existing external boundary are internal structure.
 
 When the major external boundary is broken, the previous structural context must be re-evaluated/rebuilt.
 
 No arbitrary price-distance threshold is required to define internal structure; the existing structural boundary defines its scope.
 
-## 11. Canonical principle
+The exact scope transition and rebuild behavior remain the next implementation milestone.
 
-The engine must not create zig-zag structure merely because a chart visually contains corners.
+## 13. Explicit unresolved items
 
-Pullbacks are auxiliary validation/reference objects, not canonical structure nodes.
-
-Until a pullback is confirmed:
-
-```
-NO VALID SWING
-→ NO HH/HL/LH/LL NODE
-→ NO CANONICAL STRUCTURE NODE
-```
-
-Even when a directional leg contains many pullbacks:
-
-```
-EXTREME → P1 → P2 → P3 → P4
-```
-
-the canonical market structure remains a straight leg until an active pullback is broken in the opposing direction and the associated extreme becomes a valid swing.
-
-## 12. Explicit unresolved items before coding
-
-The following must be formalized and tested before implementation:
+The following remain before Market Structure v1 is considered complete:
 
 1. Exact recursive reference behavior for nested INSIDE/OUTSIDE sequences.
-2. Ordering when one candle breaks multiple pullbacks or structural levels simultaneously.
-3. Exact reset/rebuild rules after a valid swing is broken.
-4. Minimum information needed to initialize the first external structure.
-5. Exact event ordering for simultaneous UP/DOWN breaks.
-6. As-of-time representation so no future-confirmed swing leaks into historical model features.
+2. Exact reset/rebuild rules after an external boundary is broken.
+3. Internal versus external scope transitions.
+4. Exact event ordering for simultaneous structural transitions.
 
-## 13. Planned validation sequence
+Already resolved in the current implementation:
+
+- first usable BOS can establish the structural anchor;
+- required state can be captured in `StructureCheckpoint`;
+- processing can continue from the checkpoint;
+- swing confirmation time is distinct from historical swing location;
+- future-confirmed swings are unavailable before confirmation;
+- BOS targets only previously confirmed valid swings.
+
+## 14. Planned validation sequence
 
 Before production code:
 
@@ -232,8 +314,9 @@ Candle validity
 → Multiple pullbacks
 → Valid swing → structure break
 → Two-sided break
+→ First BOS / checkpoint
 → Internal structure
 → External boundary break / rebuild
 ```
 
-This document is the current locked conceptual baseline, not yet the final executable specification.
+This document is the locked implementation baseline for the deterministic Market Structure layer.
