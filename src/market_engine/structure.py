@@ -109,6 +109,16 @@ class StructureCheckpoint:
     external_low: ValidSwing | None = None
 
 
+@dataclass(frozen=True)
+class StructureSnapshot:
+    index: int
+    direction: Direction | None
+    last_high: ValidSwing | None
+    last_low: ValidSwing | None
+    last_swing_confirmation_index: int | None
+    last_bos_index: int | None
+
+
 def classify_structural_candle(
     current: pd.Series,
     reference: pd.Series,
@@ -175,6 +185,7 @@ def _process_structural_candles(
     candles: Iterable[StructuralCandle],
     checkpoint: StructureCheckpoint | None = None,
     stop_after_first_bos: bool = False,
+    collect_snapshots: bool = False,
 ) -> tuple[
     list[ValidSwing],
     list[StructureEvent],
@@ -183,6 +194,7 @@ def _process_structural_candles(
     state = StructureState()
     swings: list[ValidSwing] = []
     events: list[StructureEvent] = []
+    snapshots: list[StructureSnapshot] = []
 
     last_high: ValidSwing | None = None
     last_low: ValidSwing | None = None
@@ -190,6 +202,8 @@ def _process_structural_candles(
     broken_low_index: int | None = None
     external_high: ValidSwing | None = None
     external_low: ValidSwing | None = None
+    last_swing_confirmation_index: int | None = None
+    last_bos_index: int | None = None
 
     if checkpoint is not None:
         state.direction = checkpoint.direction
@@ -205,6 +219,8 @@ def _process_structural_candles(
         broken_low_index = checkpoint.broken_low_index
         external_high = checkpoint.external_high
         external_low = checkpoint.external_low
+        if checkpoint.last_swing is not None:
+            last_swing_confirmation_index = checkpoint.last_swing.confirmation_index
 
     for candle in candles:
         high_target = (
@@ -260,6 +276,7 @@ def _process_structural_candles(
                 )
             )
             broken_high_index = bos_high.index
+            last_bos_index = candle.index
 
         if bos_low is not None:
             events.append(
@@ -274,6 +291,7 @@ def _process_structural_candles(
                 )
             )
             broken_low_index = bos_low.index
+            last_bos_index = candle.index
 
         rebuild_after_candle = (
             external_boundary_broken
@@ -296,6 +314,17 @@ def _process_structural_candles(
                 state.direction = Direction.DOWN
                 state.extreme = candle
 
+            snapshots.append(
+                StructureSnapshot(
+                    index=candle.index,
+                    direction=state.direction,
+                    last_high=last_high,
+                    last_low=last_low,
+                    last_swing_confirmation_index=last_swing_confirmation_index,
+                    last_bos_index=last_bos_index,
+                )
+            )
+
             if first_bos and stop_after_first_bos:
                 checkpoint_out = StructureCheckpoint(
                     index=candle.index,
@@ -312,6 +341,8 @@ def _process_structural_candles(
                     external_high=external_high,
                     external_low=external_low,
                 )
+                if collect_snapshots:
+                    return swings, events, checkpoint_out, snapshots
                 return swings, events, checkpoint_out
 
             continue
@@ -352,6 +383,7 @@ def _process_structural_candles(
                 if swing.scope is StructureScope.EXTERNAL:
                     external_high = swing
                 swings.append(swing)
+                last_swing_confirmation_index = candle.index
                 events.append(
                     StructureEvent(
                         index=candle.index,
@@ -460,6 +492,11 @@ def _process_structural_candles(
             external_low = current_low
             state.previous_swing = None
             state.scope = StructureScope.EXTERNAL
+            last_swing_confirmation_index = (
+                candle.index
+                if current_high is not None or current_low is not None
+                else None
+            )
             if current_high is None and current_low is None:
                 state.last_swing = None
                 state.direction = (
@@ -471,6 +508,17 @@ def _process_structural_candles(
                 )
                 state.extreme = candle
                 state.pullback = None
+
+        snapshots.append(
+            StructureSnapshot(
+                index=candle.index,
+                direction=state.direction,
+                last_high=last_high,
+                last_low=last_low,
+                last_swing_confirmation_index=last_swing_confirmation_index,
+                last_bos_index=last_bos_index,
+            )
+        )
 
         if first_bos and stop_after_first_bos:
             checkpoint_out = StructureCheckpoint(
@@ -488,9 +536,24 @@ def _process_structural_candles(
                 external_high=external_high,
                 external_low=external_low,
             )
+            if collect_snapshots:
+                return swings, events, checkpoint_out, snapshots
             return swings, events, checkpoint_out
 
+    if collect_snapshots:
+        return swings, events, None, snapshots
     return swings, events, None
+
+
+def process_structural_candles_with_context(
+    candles: Iterable[StructuralCandle],
+) -> tuple[list[ValidSwing], list[StructureEvent], list[StructureSnapshot]]:
+    """Run structure and return one post-candle snapshot per input candle."""
+    swings, events, _, snapshots = _process_structural_candles(
+        candles,
+        collect_snapshots=True,
+    )
+    return swings, events, snapshots
 
 
 def process_structural_candles(
