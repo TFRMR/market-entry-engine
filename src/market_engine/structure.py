@@ -373,3 +373,13 @@ def build_structural_sequence(frame: pd.DataFrame) -> list[StructuralCandle]:
         reference = row
 
     return result
+
+
+def find_first_bos(candles):
+    _, events = process_structural_candles(candles)
+
+    for event in events:
+        if event.event.endswith("_BOS"):
+            return event
+
+    return None
