@@ -121,15 +121,42 @@ Structure features are separate from:
 Those feature families may later be combined into the model matrix, but their
 semantics remain independent.
 
-## 9. Future extensions
+## 9. Active structural context
+
+The first active-context feature set now exposes:
+
+| Feature | Meaning |
+|---|---|
+| `structure_direction` | active structural leg: `1` = UP, `-1` = DOWN, `0` = not established |
+| `structure_distance_to_high` | latest confirmed valid high minus current close |
+| `structure_distance_to_low` | current close minus latest confirmed valid low |
+| `structure_bars_since_last_swing` | raw candle-index distance from the latest confirmed swing |
+| `structure_bars_since_last_bos` | raw candle-index distance from the latest BOS |
+
+Distance features remain unavailable until the corresponding confirmed swing
+exists. Age features remain unavailable until the corresponding event exists.
+
+The context is sampled after each accepted structural candle and then carried
+forward across raw candles that are INSIDE the current structural reference.
+This preserves the structural engine's inside-candle semantics.
+
+## 10. No-look-ahead extension
+
+Active context follows the same information-availability rule as event flags:
+
+- current direction reflects state after the current candle;
+- a swing becomes available at confirmation time;
+- BOS age starts at zero on the BOS candle;
+- future structure cannot alter an earlier row;
+- historical swing location is never substituted for confirmation time.
+
+## 11. Future extensions
 
 The next structure-feature extensions should be added only with an explicit
 contract and regression test, especially for:
 
-- active structural direction;
-- distance to confirmed swing levels;
-- bars since last confirmed swing/BOS;
 - normalized structure distances using historical volatility;
-- setup-state features derived from multiple structure events.
+- setup-state features derived from multiple structure events;
+- execution-oriented state that depends on explicitly defined entry timing.
 
 These extensions must preserve the same confirmation-time/no-look-ahead rule.
