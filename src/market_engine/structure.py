@@ -275,37 +275,18 @@ def _process_structural_candles(
             )
             broken_low_index = bos_low.index
 
-        if external_boundary_broken and not (
-            first_bos and stop_after_first_bos
-        ):
-            # The broken outer range is closed. Rebuild from this candle so
-            # no old internal swing can become a target in the new context.
-            broke_high = (
-                bos_high is not None
-                and bos_high.scope is StructureScope.EXTERNAL
-            )
-            broke_low = (
-                bos_low is not None
-                and bos_low.scope is StructureScope.EXTERNAL
-            )
-            last_high = None
-            last_low = None
-            broken_high_index = None
-            broken_low_index = None
-            external_high = None
-            external_low = None
-            state.last_swing = None
-            state.previous_swing = None
-            state.scope = StructureScope.EXTERNAL
-            state.direction = (
-                Direction.UP
-                if broke_high and not broke_low
-                else Direction.DOWN
-                if broke_low and not broke_high
-                else state.direction
-            )
-            state.extreme = candle
-            state.pullback = None
+        rebuild_after_candle = (
+            external_boundary_broken
+            and not (first_bos and stop_after_first_bos)
+        )
+        broke_high = (
+            bos_high is not None
+            and bos_high.scope is StructureScope.EXTERNAL
+        )
+        broke_low = (
+            bos_low is not None
+            and bos_low.scope is StructureScope.EXTERNAL
+        )
 
         if state.direction is None:
             if candle.kind is CandleKind.UP:
@@ -452,6 +433,44 @@ def _process_structural_candles(
                     extreme_index=state.extreme.index,
                     extreme_price=state.extreme.low,
                 )
+
+        if rebuild_after_candle:
+            # Close the broken outer context only after this candle has had
+            # its normal structural effect. A swing confirmed on this candle
+            # belongs to the rebuilt context; older internal swings do not.
+            current_high = (
+                state.last_swing
+                if state.last_swing is not None
+                and state.last_swing.confirmation_index == candle.index
+                and state.last_swing.swing_type is SwingType.HIGH
+                else None
+            )
+            current_low = (
+                state.last_swing
+                if state.last_swing is not None
+                and state.last_swing.confirmation_index == candle.index
+                and state.last_swing.swing_type is SwingType.LOW
+                else None
+            )
+            last_high = current_high
+            last_low = current_low
+            broken_high_index = None
+            broken_low_index = None
+            external_high = current_high
+            external_low = current_low
+            state.previous_swing = None
+            state.scope = StructureScope.EXTERNAL
+            if current_high is None and current_low is None:
+                state.last_swing = None
+                state.direction = (
+                    Direction.UP
+                    if broke_high and not broke_low
+                    else Direction.DOWN
+                    if broke_low and not broke_high
+                    else state.direction
+                )
+                state.extreme = candle
+                state.pullback = None
 
         if first_bos and stop_after_first_bos:
             checkpoint_out = StructureCheckpoint(
