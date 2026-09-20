@@ -1,6 +1,6 @@
 # Market Structure Specification v1
 
-Status: IMPLEMENTATION BASELINE — internal/external scope classification implemented  \
+Status: IMPLEMENTATION BASELINE — internal/external scope and boundary rebuild implemented  \
 Scope: deterministic market-structure engine for the Market Entry Engine
 
 ## 1. Core hierarchy
@@ -278,7 +278,7 @@ External: HL ───────────────┘
 
 Valid swings and structure events inside the existing external boundary are internal structure.
 
-When the major external boundary is broken, the previous structural context must be re-evaluated/rebuilt.
+When the major external boundary is broken, the previous structural context is closed and rebuilt forward from the boundary-break candle.
 
 No arbitrary price-distance threshold is required to define internal structure; the existing structural boundary defines its scope.
 
@@ -290,7 +290,7 @@ Scope is assigned from the active external boundary, not from a fixed distance t
 - A newly confirmed valid swing remains INTERNAL when its price is inside that outer range.
 - An internal swing does not replace the corresponding external boundary.
 - When price breaks an active external boundary, the break is emitted as the applicable BOS event and the previous external context is considered closed.
-- The engine then rebuilds structure forward from the boundary-break candle using only information available at and after that point; it must not retroactively promote prior internal swings to external status.
+- The engine rebuilds state from the boundary-break candle using only information available at and after that point; prior internal swings are discarded as targets and are never retroactively promoted to external status.
 - After rebuild, the first newly established structural range becomes the new external context.
 
 This scope model is structural: no arbitrary price-distance, candle-count, or volatility threshold is used.
@@ -313,7 +313,7 @@ Already resolved in the current implementation:
 - internal/external scope is determined by the active structural boundary;
 - valid swings inside an established external high/low range are classified INTERNAL;
 - external swing candidates update the corresponding external boundary;
-- external-boundary break/rebuild behavior remains to be implemented and validated.
+- external-boundary break/rebuild behavior is implemented and validated by the focused regression test.
 
 ## 14. Planned validation sequence
 
@@ -333,7 +333,6 @@ Candle validity
 → Internal structure
 → External boundary break / rebuild
 → scope transition validation
-→ external boundary rebuild
 ```
 
-This document is the implementation baseline for the deterministic Market Structure layer. Core rules marked above are locked. Internal/external scope and external-boundary rebuild are now locked as the next implementation contract; only the remaining section 13 items must be resolved before Market Structure v1 is closed.
+This document is the implementation baseline for the deterministic Market Structure layer. Core rules marked above are locked. Internal/external scope and external-boundary rebuild are now implemented against the locked contract; only the remaining section 13 items must be resolved before Market Structure v1 is closed.
