@@ -497,3 +497,29 @@ def test_structure_checkpoint_starts_after_anchor_candle():
     assert checkpoint.last_swing.index == 2
     assert checkpoint.last_swing.confirmation_index == 4
     assert checkpoint.broken_high_index == 2
+
+
+def test_valid_swing_scope_is_internal_inside_external_boundaries():
+    candles = [
+        StructuralCandle(0, "00:00", 12, 9, 10, 11, CandleKind.UP),
+        StructuralCandle(1, "00:30", 14, 10, 11, 13, CandleKind.UP),
+        StructuralCandle(2, "01:00", 14.5, 11, 13, 14, CandleKind.UP),
+        StructuralCandle(3, "01:30", 13.5, 10, 13, 11, CandleKind.DOWN),
+        StructuralCandle(4, "02:00", 13, 8, 11, 9, CandleKind.DOWN),
+        StructuralCandle(5, "02:30", 12, 9, 9, 11, CandleKind.UP),
+        StructuralCandle(6, "03:00", 13, 10, 11, 12, CandleKind.UP),
+        StructuralCandle(7, "03:30", 13.5, 11, 12, 13, CandleKind.UP),
+        StructuralCandle(8, "04:00", 13.2, 13, 13, 13.1, CandleKind.DOWN),
+        StructuralCandle(9, "04:30", 12.5, 12, 13, 12.2, CandleKind.DOWN),
+    ]
+
+    swings, events = process_structural_candles(candles)
+
+    assert [(s.swing_type, s.index, s.scope) for s in swings] == [
+        (SwingType.HIGH, 2, StructureScope.EXTERNAL),
+        (SwingType.LOW, 4, StructureScope.EXTERNAL),
+        (SwingType.HIGH, 7, StructureScope.INTERNAL),
+    ]
+
+    assert events[-1].event == "SWING_HIGH_VALID"
+    assert events[-1].scope is StructureScope.INTERNAL
