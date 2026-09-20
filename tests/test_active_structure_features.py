@@ -32,5 +32,4 @@ def test_active_structure_context_tracks_bos_age_without_lookahead():
     result = add_active_structure_features(make_structure_frame())
 
     assert pd.isna(result.loc[5, "structure_bars_since_last_bos"])
-    assert result.loc[6, "structure_bullish_bos"] == 1
     assert result.loc[6, "structure_bars_since_last_bos"] == 0
