@@ -185,7 +185,7 @@ def test_process_from_first_bos_uses_bos_as_anchor():
     assert anchor.event == "BULLISH_BOS"
     assert anchor.index == 6
     assert all(event.index >= anchor.index for event in events)
-    assert all(swing.confirmation_index >= anchor.index for swing in swings)
+    assert any(swing.index == anchor.swing_index for swing in swings)
 
 
 def test_process_from_first_bos_returns_none_without_bos():
@@ -195,3 +195,43 @@ def test_process_from_first_bos_returns_none_without_bos():
     ]
 
     assert process_from_first_bos(candles) is None
+
+
+def test_process_from_first_bos_preserves_broken_swing_context():
+    candles = [
+        StructuralCandle(0, "2026-01-01 00:00", 12, 9, 10, 11, CandleKind.UP),
+        StructuralCandle(1, "2026-01-01 00:30", 14, 10, 11, 13, CandleKind.UP),
+        StructuralCandle(2, "2026-01-01 01:00", 14.5, 11, 13, 14, CandleKind.UP),
+        StructuralCandle(3, "2026-01-01 01:30", 13.5, 10, 13, 11, CandleKind.DOWN),
+        StructuralCandle(4, "2026-01-01 02:00", 13, 8, 11, 9, CandleKind.DOWN),
+        StructuralCandle(5, "2026-01-01 02:30", 12, 9, 9, 11, CandleKind.UP),
+        StructuralCandle(6, "2026-01-01 03:00", 15, 11, 11, 14, CandleKind.UP),
+        StructuralCandle(7, "2026-01-01 03:30", 16, 12, 14, 15, CandleKind.UP),
+    ]
+
+    anchor = find_first_bos(candles)
+    assert anchor is not None
+
+    _, full_events = process_structural_candles(candles)
+
+    full_bos = [
+        event for event in full_events
+        if event.event.endswith("_BOS")
+    ]
+
+    assert full_bos
+    assert full_bos[0].index == anchor.index
+    assert full_bos[0].swing_index is not None
+    assert full_bos[0].swing_index < anchor.index
+
+    result = process_from_first_bos(candles)
+    assert result is not None
+
+    _, swings, events = result
+
+    # The anchor's broken swing is historical context,
+    # so it must remain available to the anchored structure.
+    assert any(
+        swing.index == full_bos[0].swing_index
+        for swing in swings
+    )
