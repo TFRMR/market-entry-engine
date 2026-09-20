@@ -72,7 +72,7 @@ Current next step:
 
 - implement setup candidates from confirmed BOS
 - implement next-candle-open entry timing
-- implement fixed invalidation and configurable R target
+- implement fixed structural invalidation and candidate-level risk
 - keep execution costs explicit and separate from structural facts
 
 The project deliberately keeps deterministic structure and feature contracts
@@ -108,7 +108,8 @@ ahead of statistical modeling and entry optimization.
 
 - [x] Market context features
 - [x] Setup definition
-- [x] Entry / invalidation / target semantics
+- [x] Setup / entry / invalidation semantics
+- [ ] Target / exit-area model
 - [ ] Execution cost model
 - [ ] Deterministic execution baseline
 
