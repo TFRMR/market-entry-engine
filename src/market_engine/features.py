@@ -393,23 +393,29 @@ def add_active_structure_features(frame: pd.DataFrame) -> pd.DataFrame:
         if position < 0 or position >= len(result):
             raise ValueError("Structure snapshot index is outside the feature frame.")
 
-        direction.iloc[position] = direction_code[snapshot.direction.value if snapshot.direction else None]
+        direction.iloc[position] = direction_code[
+            snapshot.direction.value if snapshot.direction else None
+        ]
         if snapshot.last_high is not None:
             last_high.iloc[position] = snapshot.last_high.price
         if snapshot.last_low is not None:
             last_low.iloc[position] = snapshot.last_low.price
         if snapshot.last_swing_confirmation_index is not None:
-            last_swing_index.iloc[position] = snapshot.last_swing_confirmation_index
+            last_swing_index.iloc[position] = (
+                snapshot.last_swing_confirmation_index
+            )
         if snapshot.last_bos_index is not None:
             last_bos_index.iloc[position] = snapshot.last_bos_index
 
-    result["structure_direction"] = direction.ffill().fillna(0)
-    result["structure_distance_to_high"] = last_high.ffill() - result["close"]
-    result["structure_distance_to_low"] = result["close"] - last_low.ffill()
+    result["structure_direction"] = direction.fillna(0)
+    result["structure_distance_to_high"] = last_high - result["close"]
+    result["structure_distance_to_low"] = result["close"] - last_low
 
-    last_swing_index = last_swing_index.ffill()
-    last_bos_index = last_bos_index.ffill()
-    current_index = pd.Series(result.index, index=result.index, dtype=float)
+    current_index = pd.Series(
+        np.arange(len(result)),
+        index=result.index,
+        dtype=float,
+    )
 
     result["structure_bars_since_last_swing"] = current_index - last_swing_index
     result["structure_bars_since_last_bos"] = current_index - last_bos_index
