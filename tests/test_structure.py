@@ -235,3 +235,30 @@ def test_process_from_first_bos_preserves_broken_swing_context():
         swing.index == full_bos[0].swing_index
         for swing in swings
     )
+
+
+def test_process_from_first_bos_handles_bearish_anchor():
+    candles = [
+        StructuralCandle(0, "2026-01-01 00:00", 11, 8, 10, 9, CandleKind.DOWN),
+        StructuralCandle(1, "2026-01-01 00:30", 10, 6, 9, 7, CandleKind.DOWN),
+        StructuralCandle(2, "2026-01-01 01:00", 9, 6.5, 7, 8, CandleKind.UP),
+        StructuralCandle(3, "2026-01-01 01:30", 10, 7, 8, 9, CandleKind.UP),
+        StructuralCandle(4, "2026-01-01 02:00", 9, 5, 8, 6, CandleKind.DOWN),
+        StructuralCandle(5, "2026-01-01 02:30", 8, 4, 6, 5, CandleKind.DOWN),
+        StructuralCandle(6, "2026-01-01 03:00", 7, 3, 5, 4, CandleKind.DOWN),
+    ]
+
+    result = process_from_first_bos(candles)
+
+    assert result is not None
+
+    anchor, swings, events = result
+
+    assert anchor.event == "BEARISH_BOS"
+    assert anchor.direction is Direction.DOWN
+    assert anchor.index == 4
+    assert anchor.swing_index is not None
+    assert anchor.swing_index < anchor.index
+
+    assert all(event.index >= anchor.index for event in events)
+    assert any(swing.index == anchor.swing_index for swing in swings)
