@@ -278,8 +278,16 @@ def _process_structural_candles(
         if external_boundary_broken and not (
             first_bos and stop_after_first_bos
         ):
-            # The broken outer range is closed. Do not let its old internal
-            # swings become targets in the rebuilt structure.
+            # The broken outer range is closed. Rebuild from this candle so
+            # no old internal swing can become a target in the new context.
+            broke_high = (
+                bos_high is not None
+                and bos_high.scope is StructureScope.EXTERNAL
+            )
+            broke_low = (
+                bos_low is not None
+                and bos_low.scope is StructureScope.EXTERNAL
+            )
             last_high = None
             last_low = None
             broken_high_index = None
@@ -289,6 +297,15 @@ def _process_structural_candles(
             state.last_swing = None
             state.previous_swing = None
             state.scope = StructureScope.EXTERNAL
+            state.direction = (
+                Direction.UP
+                if broke_high and not broke_low
+                else Direction.DOWN
+                if broke_low and not broke_high
+                else state.direction
+            )
+            state.extreme = candle
+            state.pullback = None
 
         if state.direction is None:
             if candle.kind is CandleKind.UP:
