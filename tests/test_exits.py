@@ -1,6 +1,12 @@
 from market_engine.entry import SetupCandidate
 from market_engine.exits import build_exit_areas
-from market_engine.structure import Direction, StructureScope, SwingType, ValidSwing
+from market_engine.structure import (
+    Direction,
+    StructureEvent,
+    StructureScope,
+    SwingType,
+    ValidSwing,
+)
 
 
 def swing(index: int, price: float, kind: SwingType, confirmation: int) -> ValidSwing:
@@ -59,3 +65,30 @@ def test_exit_areas_have_explicit_source_metadata():
     assert areas[0].source_type == "VALID_SWING"
     assert areas[0].source_index == 2
     assert areas[0].source_confirmation_index == 2
+
+
+def test_exit_areas_exclude_same_candle_confirmation():
+    areas = build_exit_areas(
+        candidate(Direction.UP),
+        [swing(2, 106, SwingType.HIGH, 5), swing(3, 108, SwingType.HIGH, 4)],
+    )
+    assert [area.price for area in areas] == [108.0]
+
+
+def test_exit_areas_exclude_already_broken_swings():
+    areas = build_exit_areas(
+        candidate(Direction.UP),
+        [swing(2, 106, SwingType.HIGH, 2), swing(3, 108, SwingType.HIGH, 3)],
+        events=[
+            StructureEvent(
+                index=4,
+                timestamp=4,
+                event="BULLISH_BOS",
+                direction=Direction.UP,
+                swing_index=2,
+                swing_price=106.0,
+                scope=StructureScope.EXTERNAL,
+            )
+        ],
+    )
+    assert [area.price for area in areas] == [108.0]
