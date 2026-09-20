@@ -327,11 +327,34 @@ Scope is assigned from the active external boundary, not from a fixed distance t
 
 This scope model is structural: no arbitrary price-distance, candle-count, or volatility threshold is used.
 
-## 13. Explicit unresolved items
+## 13. Event ordering
+
+When one structural candle causes multiple transitions, the engine applies this deterministic ordering:
+
+1. Evaluate BOS targets using only swings confirmed before the current candle.
+2. Emit `BULLISH_BOS` first when a confirmed high is broken.
+3. Emit `BEARISH_BOS` second when a confirmed low is broken.
+4. Apply the candle's normal directional/pullback state transition.
+5. Emit any swing-validation event produced by that state transition.
+6. Apply external-boundary rebuild after the candle's normal structural effect.
+
+Therefore, a current candle can never use a swing it confirms on that same candle as a BOS target. BOS events describe breaks of pre-existing structure; swing-validation events describe structure that becomes known because of the current candle.
+
+For a two-sided break, both BOS events are retained rather than collapsing the candle to one direction:
+
+```
+BULLISH_BOS
+BEARISH_BOS
+→ normal candle processing
+→ optional SWING_*_VALID
+→ optional external rebuild
+```
+
+This ordering is an implementation contract and is independent of candle bullish/bearish body color.
+
+## 14. Explicit unresolved items
 
 The following remain before Market Structure v1 is considered complete:
-
-1. Exact event ordering for simultaneous structural transitions beyond the currently locked OUTSIDE/extreme-extension rule.
 
 Already resolved in the current implementation:
 
@@ -346,8 +369,9 @@ Already resolved in the current implementation:
 - external swing candidates update the corresponding external boundary;
 - external-boundary break/rebuild behavior is implemented and validated by the focused regression test.
 - nested INSIDE/OUTSIDE reference behavior is now locked: INSIDE preserves the latest structural reference; every non-INSIDE candle replaces it.
+- simultaneous transition ordering is now locked: pre-existing BOS events are emitted before current-candle swing validation, with bullish BOS before bearish BOS when both occur on the same candle.
 
-## 14. Planned validation sequence
+## 15. Planned validation sequence
 
 Before production code:
 
