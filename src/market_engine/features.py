@@ -5,6 +5,13 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from market_engine.structure import (
+    StructureScope,
+    SwingType,
+    build_structural_sequence,
+    process_structural_candles,
+)
+
 
 def add_momentum_features(frame: pd.DataFrame) -> pd.DataFrame:
     """Add basic momentum-candle structure features."""
@@ -239,6 +246,7 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     result = add_recent_movement_features(result)
     result = add_micro_structure_features(result)
     result = add_volume_features(result)
+    result = add_structure_event_features(result)
 
     return result
 
@@ -277,6 +285,85 @@ def add_micro_structure_features(frame: pd.DataFrame) -> pd.DataFrame:
         result[f"range_vs_avg_{window}"] = (
             candle_range / previous_average_range
         )
+
+    return result
+
+
+def add_structure_event_features(frame: pd.DataFrame) -> pd.DataFrame:
+    """Add deterministic market-structure events aligned to confirmation time."""
+    result = frame.copy()
+    structural = build_structural_sequence(result)
+    swings, events = process_structural_candles(structural)
+
+    size = len(result)
+    event_columns = {
+        "structure_bullish_bos": "BULLISH_BOS",
+        "structure_bearish_bos": "BEARISH_BOS",
+        "structure_swing_high_valid": "SWING_HIGH_VALID",
+        "structure_swing_low_valid": "SWING_LOW_VALID",
+    }
+    for column in event_columns:
+        result[column] = 0
+
+    result["structure_internal_bos"] = 0
+    result["structure_external_bos"] = 0
+    result["structure_internal_swing"] = 0
+    result["structure_external_swing"] = 0
+
+    last_high = np.full(size, np.nan)
+    last_low = np.full(size, np.nan)
+
+    for event in events:
+        position = event.index
+        if position < 0 or position >= size:
+            raise ValueError("Structure event index is outside the feature frame.")
+
+        for column, event_name in event_columns.items():
+            if event.event == event_name:
+                result.iloc[position, result.columns.get_loc(column)] = 1
+
+        if event.event.endswith("_BOS"):
+            column = (
+                "structure_internal_bos"
+                if event.scope is StructureScope.INTERNAL
+                else "structure_external_bos"
+            )
+            result.iloc[position, result.columns.get_loc(column)] = 1
+
+        if event.event.startswith("SWING_"):
+            column = (
+                "structure_internal_swing"
+                if event.scope is StructureScope.INTERNAL
+                else "structure_external_swing"
+            )
+            result.iloc[position, result.columns.get_loc(column)] = 1
+
+    for swing in swings:
+        position = swing.confirmation_index
+        if position < 0 or position >= size:
+            raise ValueError("Swing confirmation index is outside the feature frame.")
+
+        if swing.swing_type is SwingType.HIGH:
+            last_high[position] = swing.price
+        else:
+            last_low[position] = swing.price
+
+    result["structure_last_valid_high"] = pd.Series(
+        last_high,
+        index=result.index,
+    ).ffill()
+
+    result["structure_last_valid_low"] = pd.Series(
+        last_low,
+        index=result.index,
+    ).ffill()
+
+    for label in ("HH", "HL", "LH", "LL"):
+        values = np.zeros(size, dtype=int)
+        for swing in swings:
+            if swing.label == label:
+                values[swing.confirmation_index] = 1
+        result[f"structure_{label.lower()}"] = values
 
     return result
 
