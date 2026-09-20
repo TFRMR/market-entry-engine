@@ -35,8 +35,11 @@ For a LONG candidate, eligible exit areas are confirmed valid swing highs above
 entry. For a SHORT candidate, eligible exit areas are confirmed valid swing lows
 below entry.
 
-Levels confirmed after the setup candle are excluded. This keeps exit-area
+Levels confirmed on or after the setup candle are excluded. This keeps exit-area
 construction causal at setup time.
+
+A valid swing that has already been broken by a BOS before setup is also
+excluded; an already-consumed structural level is not a fresh exit area.
 
 Later versions may add structure boundaries, liquidity, FVG, OB, or
 support/resistance as separate source types.
