@@ -68,6 +68,7 @@ class ValidSwing:
     confirmation_index: int
     confirmation_timestamp: object
     label: str | None = None
+    scope: StructureScope = StructureScope.EXTERNAL
 
 
 @dataclass(frozen=True)
@@ -78,6 +79,7 @@ class StructureEvent:
     direction: Direction | None
     swing_index: int | None = None
     swing_price: float | None = None
+    scope: StructureScope = StructureScope.EXTERNAL
 
 
 @dataclass
@@ -103,6 +105,8 @@ class StructureCheckpoint:
     last_low: ValidSwing | None
     broken_high_index: int | None
     broken_low_index: int | None
+    external_high: ValidSwing | None = None
+    external_low: ValidSwing | None = None
 
 
 def classify_structural_candle(
@@ -139,6 +143,7 @@ def _confirm_swing(
     candle: StructuralCandle,
     swing_type: SwingType,
     previous_same_type: ValidSwing | None,
+    scope: StructureScope,
 ) -> ValidSwing:
     assert state.extreme is not None
     swing = ValidSwing(
@@ -152,6 +157,7 @@ def _confirm_swing(
         swing_type=swing_type,
         confirmation_index=candle.index,
         confirmation_timestamp=candle.timestamp,
+        scope=scope,
     )
     return ValidSwing(
         index=swing.index,
@@ -161,6 +167,7 @@ def _confirm_swing(
         confirmation_index=swing.confirmation_index,
         confirmation_timestamp=swing.confirmation_timestamp,
         label=_label_swing(swing, previous_same_type),
+        scope=scope,
     )
 
 
@@ -181,6 +188,8 @@ def _process_structural_candles(
     last_low: ValidSwing | None = None
     broken_high_index: int | None = None
     broken_low_index: int | None = None
+    external_high: ValidSwing | None = None
+    external_low: ValidSwing | None = None
 
     if checkpoint is not None:
         state.direction = checkpoint.direction
@@ -194,6 +203,8 @@ def _process_structural_candles(
         last_low = checkpoint.last_low
         broken_high_index = checkpoint.broken_high_index
         broken_low_index = checkpoint.broken_low_index
+        external_high = checkpoint.external_high
+        external_low = checkpoint.external_low
 
     for candle in candles:
         bos_high = (
@@ -225,6 +236,7 @@ def _process_structural_candles(
                     direction=Direction.UP,
                     swing_index=bos_high.index,
                     swing_price=bos_high.price,
+                    scope=bos_high.scope,
                 )
             )
             broken_high_index = bos_high.index
@@ -238,6 +250,7 @@ def _process_structural_candles(
                     direction=Direction.DOWN,
                     swing_index=bos_low.index,
                     swing_price=bos_low.price,
+                    scope=bos_low.scope,
                 )
             )
             broken_low_index = bos_low.index
@@ -284,15 +297,25 @@ def _process_structural_candles(
                     extreme_price=state.extreme.high,
                 )
             elif candle.low < state.pullback.price:
+                swing_scope = (
+                    StructureScope.INTERNAL
+                    if external_high is not None
+                    and external_low is not None
+                    and external_low.price < state.extreme.high < external_high.price
+                    else StructureScope.EXTERNAL
+                )
                 swing = _confirm_swing(
                     state,
                     candle,
                     SwingType.HIGH,
                     last_high,
+                    swing_scope,
                 )
                 state.previous_swing = state.last_swing
                 state.last_swing = swing
                 last_high = swing
+                if swing.scope is StructureScope.EXTERNAL:
+                    external_high = swing
                 swings.append(swing)
                 events.append(
                     StructureEvent(
@@ -302,6 +325,7 @@ def _process_structural_candles(
                         direction=Direction.DOWN,
                         swing_index=swing.index,
                         swing_price=swing.price,
+                        scope=swing.scope,
                     )
                 )
                 state.direction = Direction.DOWN
@@ -331,15 +355,25 @@ def _process_structural_candles(
                     extreme_price=state.extreme.low,
                 )
             elif candle.high > state.pullback.price:
+                swing_scope = (
+                    StructureScope.INTERNAL
+                    if external_high is not None
+                    and external_low is not None
+                    and external_low.price < state.extreme.low < external_high.price
+                    else StructureScope.EXTERNAL
+                )
                 swing = _confirm_swing(
                     state,
                     candle,
                     SwingType.LOW,
                     last_low,
+                    swing_scope,
                 )
                 state.previous_swing = state.last_swing
                 state.last_swing = swing
                 last_low = swing
+                if swing.scope is StructureScope.EXTERNAL:
+                    external_low = swing
                 swings.append(swing)
                 events.append(
                     StructureEvent(
@@ -349,6 +383,7 @@ def _process_structural_candles(
                         direction=Direction.UP,
                         swing_index=swing.index,
                         swing_price=swing.price,
+                        scope=swing.scope,
                     )
                 )
                 state.direction = Direction.UP
@@ -377,6 +412,8 @@ def _process_structural_candles(
                 last_low=last_low,
                 broken_high_index=broken_high_index,
                 broken_low_index=broken_low_index,
+                external_high=external_high,
+                external_low=external_low,
             )
             return swings, events, checkpoint_out
 
