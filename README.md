@@ -129,3 +129,11 @@ This project is for research and experimentation.
 
 Model predictions are uncertain. Historical or backtested performance
 does not establish future results. This project is not financial advice.
+
+
+### Checkpoint equivalence
+
+The first-BOS checkpoint is defined as a post-candle state. If the first BOS
+also closes an external boundary, the boundary rebuild is applied before the
+checkpoint is emitted. Forward continuation from that checkpoint must produce
+the same post-anchor events and confirmed swings as the uninterrupted full run.
