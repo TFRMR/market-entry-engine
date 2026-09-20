@@ -321,3 +321,27 @@ def test_process_from_first_bos_keeps_future_confirmed_swing_unavailable_at_bos(
     ]
 
     assert future_confirmed
+
+def test_outside_candle_can_break_both_confirmed_swings():
+    candles = [
+        StructuralCandle(0, "2026-01-01 00:00", 12, 9, 10, 11, CandleKind.UP),
+        StructuralCandle(1, "2026-01-01 00:30", 14, 10, 11, 13, CandleKind.UP),
+        StructuralCandle(2, "2026-01-01 01:00", 14.5, 11, 13, 14, CandleKind.UP),
+        StructuralCandle(3, "2026-01-01 01:30", 13.5, 10, 13, 11, CandleKind.DOWN),
+        StructuralCandle(4, "2026-01-01 02:00", 13, 8, 11, 9, CandleKind.DOWN),
+        StructuralCandle(5, "2026-01-01 02:30", 12, 9, 9, 11, CandleKind.UP),
+        StructuralCandle(6, "2026-01-01 03:00", 15, 11, 11, 14, CandleKind.UP),
+        StructuralCandle(7, "2026-01-01 03:30", 10, 7, 14, 8, CandleKind.OUTSIDE),
+    ]
+
+    swings, events = process_structural_candles(candles)
+
+    bos = [event for event in events if event.event.endswith("_BOS")]
+
+    assert len(bos) == 2
+    assert {event.event for event in bos} == {
+        "BULLISH_BOS",
+        "BEARISH_BOS",
+    }
+    assert [(event.event, event.index) for event in bos] == [("BULLISH_BOS", 6), ("BEARISH_BOS", 7)]
+
