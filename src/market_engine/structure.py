@@ -2,7 +2,7 @@
 
 The engine processes candles in chronological order and emits only information
 that is knowable at the current candle. Pullbacks are validator/reference
-objects; valid swings are created only when their active pullback is broken by
+objects; valid swings are created only when the active pullback is broken by
 a reversal.
 """
 
@@ -118,24 +118,45 @@ def _label_swing(
     return "HL" if swing.price > previous.price else "LL"
 
 
-def _breaks_pullback(
+def _confirm_swing(
+    state: StructureState,
     candle: StructuralCandle,
-    pullback: PullbackCandidate,
-    direction: Direction,
-) -> bool:
-    if direction is Direction.UP:
-        return candle.low < pullback.price
-    return candle.high > pullback.price
+    swing_type: SwingType,
+) -> ValidSwing:
+    assert state.extreme is not None
+    swing = ValidSwing(
+        index=state.extreme.index,
+        timestamp=state.extreme.timestamp,
+        price=(
+            state.extreme.high
+            if swing_type is SwingType.HIGH
+            else state.extreme.low
+        ),
+        swing_type=swing_type,
+        confirmation_index=candle.index,
+        confirmation_timestamp=candle.timestamp,
+    )
+    return ValidSwing(
+        index=swing.index,
+        timestamp=swing.timestamp,
+        price=swing.price,
+        swing_type=swing.swing_type,
+        confirmation_index=swing.confirmation_index,
+        confirmation_timestamp=swing.confirmation_timestamp,
+        label=_label_swing(swing, state.last_swing),
+    )
 
 
 def process_structural_candles(
     candles: Iterable[StructuralCandle],
 ) -> tuple[list[ValidSwing], list[StructureEvent]]:
-    """Run the locked swing-validation state machine over structural candles.
+    """Run deterministic pullback -> valid-swing validation.
 
-    This is intentionally a small deterministic core. Initial direction is
-    established by the first directional structural candle; later initialization
-    from a historical BOS can be layered on without changing swing semantics.
+    A directional leg owns one active extreme. A candle that extends that
+    extreme invalidates the previous pullback candidate and starts a new leg
+    reference. A non-extending candle creates the active pullback candidate.
+    The next opposing break of that candidate validates the historical extreme
+    as a swing. Confirmation is timestamped at the breaking candle.
     """
     state = StructureState()
     swings: list[ValidSwing] = []
@@ -151,40 +172,27 @@ def process_structural_candles(
                 state.extreme = candle
             continue
 
+        assert state.extreme is not None
+
         if state.direction is Direction.UP:
-            if candle.high > state.extreme.high:  # extend current leg
-                state.extreme = candle
-
-            if state.pullback is None:
-                if candle.low < state.extreme.low:
-                    state.pullback = PullbackCandidate(
-                        index=candle.index,
-                        timestamp=candle.timestamp,
-                        price=candle.low,
-                        direction=Direction.UP,
-                        extreme_index=state.extreme.index,
-                        extreme_price=state.extreme.high,
-                    )
-                continue
-
             if candle.high > state.extreme.high:
                 state.extreme = candle
-                # The old candidate belongs to the superseded extreme.
                 state.pullback = None
                 continue
 
-            if _breaks_pullback(candle, state.pullback, Direction.UP):
-                swing = ValidSwing(
-                    index=state.extreme.index,
-                    timestamp=state.extreme.timestamp,
-                    price=state.extreme.high,
-                    swing_type=SwingType.HIGH,
-                    confirmation_index=candle.index,
-                    confirmation_timestamp=candle.timestamp,
+            if state.pullback is None:
+                state.pullback = PullbackCandidate(
+                    index=candle.index,
+                    timestamp=candle.timestamp,
+                    price=candle.low,
+                    direction=Direction.UP,
+                    extreme_index=state.extreme.index,
+                    extreme_price=state.extreme.high,
                 )
-                swing = ValidSwing(
-                    **{**swing.__dict__, "label": _label_swing(swing, state.last_swing)}
-                )
+                continue
+
+            if candle.low < state.pullback.price:
+                swing = _confirm_swing(state, candle, SwingType.HIGH)
                 state.previous_swing = state.last_swing
                 state.last_swing = swing
                 swings.append(swing)
@@ -203,10 +211,7 @@ def process_structural_candles(
                 state.pullback = None
                 continue
 
-            if candle.low < state.pullback.price:
-                # Same-direction break: candidate is invalidated, but direction
-                # remains UP. This branch is defensive; the opposing-break
-                # condition above normally catches it.
+            if candle.low > state.pullback.price:
                 state.pullback = PullbackCandidate(
                     index=candle.index,
                     timestamp=candle.timestamp,
@@ -219,36 +224,22 @@ def process_structural_candles(
         else:
             if candle.low < state.extreme.low:
                 state.extreme = candle
-
-            if state.pullback is None:
-                if candle.high > state.extreme.high:
-                    state.pullback = PullbackCandidate(
-                        index=candle.index,
-                        timestamp=candle.timestamp,
-                        price=candle.high,
-                        direction=Direction.DOWN,
-                        extreme_index=state.extreme.index,
-                        extreme_price=state.extreme.low,
-                    )
-                continue
-
-            if candle.low < state.extreme.low:
-                state.extreme = candle
                 state.pullback = None
                 continue
 
-            if _breaks_pullback(candle, state.pullback, Direction.DOWN):
-                swing = ValidSwing(
-                    index=state.extreme.index,
-                    timestamp=state.extreme.timestamp,
-                    price=state.extreme.low,
-                    swing_type=SwingType.LOW,
-                    confirmation_index=candle.index,
-                    confirmation_timestamp=candle.timestamp,
+            if state.pullback is None:
+                state.pullback = PullbackCandidate(
+                    index=candle.index,
+                    timestamp=candle.timestamp,
+                    price=candle.high,
+                    direction=Direction.DOWN,
+                    extreme_index=state.extreme.index,
+                    extreme_price=state.extreme.low,
                 )
-                swing = ValidSwing(
-                    **{**swing.__dict__, "label": _label_swing(swing, state.last_swing)}
-                )
+                continue
+
+            if candle.high > state.pullback.price:
+                swing = _confirm_swing(state, candle, SwingType.LOW)
                 state.previous_swing = state.last_swing
                 state.last_swing = swing
                 swings.append(swing)
@@ -265,6 +256,17 @@ def process_structural_candles(
                 state.direction = Direction.UP
                 state.extreme = candle
                 state.pullback = None
+                continue
+
+            if candle.high < state.pullback.price:
+                state.pullback = PullbackCandidate(
+                    index=candle.index,
+                    timestamp=candle.timestamp,
+                    price=candle.high,
+                    direction=Direction.DOWN,
+                    extreme_index=state.extreme.index,
+                    extreme_price=state.extreme.low,
+                )
 
     return swings, events
 
@@ -289,9 +291,13 @@ def build_structural_sequence(frame: pd.DataFrame) -> list[StructuralCandle]:
         low=float(reference["low"]),
         open=float(reference["open"]),
         close=float(reference["close"]),
-        kind=CandleKind.UP if reference["close"] > reference["open"]
-        else CandleKind.DOWN if reference["close"] < reference["open"]
-        else CandleKind.INSIDE,
+        kind=(
+            CandleKind.UP
+            if reference["close"] > reference["open"]
+            else CandleKind.DOWN
+            if reference["close"] < reference["open"]
+            else CandleKind.INSIDE
+        ),
     )
     result.append(first)
 
@@ -311,9 +317,7 @@ def build_structural_sequence(frame: pd.DataFrame) -> list[StructuralCandle]:
             kind=kind,
         )
         result.append(candle)
-
-        # The structural sequence advances its reference on every structural
-        # candle. An OUTSIDE candle therefore replaces the contained range.
         reference = row
 
     return result
+"
