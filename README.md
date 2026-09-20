@@ -65,11 +65,15 @@ Completed and locked:
 - external-boundary break and structure rebuild
 - deterministic simultaneous-event ordering
 - confirmation-time structure feature contract
+- active structural context features
+- deterministic entry semantics v1
 
 Current next step:
 
-- define setup, invalidation, target, and execution-cost semantics
-- keep model inputs derived from deterministic, confirmation-time features
+- implement setup candidates from confirmed BOS
+- implement next-candle-open entry timing
+- implement fixed invalidation and configurable R target
+- keep execution costs explicit and separate from structural facts
 
 The project deliberately keeps deterministic structure and feature contracts
 ahead of statistical modeling and entry optimization.
@@ -96,17 +100,17 @@ ahead of statistical modeling and entry optimization.
 - [x] BOS from confirmed valid swings
 - [x] First BOS warm-up / structural anchor
 - [x] StructureCheckpoint / forward continuation
-- [ ] Internal / external structure
-- [ ] External boundary break / rebuild
-- [ ] Close Market Structure v1 specification
+- [x] Internal / external structure
+- [x] External boundary break / rebuild
+- [x] Close Market Structure v1 specification
 
 ### Context and entry engine
 
-- [ ] Market context features
-- [ ] Setup definition
-- [ ] Entry / invalidation / target logic
+- [x] Market context features
+- [x] Setup definition
+- [x] Entry / invalidation / target semantics
 - [ ] Execution cost model
-- [ ] Deterministic baseline
+- [ ] Deterministic execution baseline
 
 ### Statistical / ML evaluation
 
