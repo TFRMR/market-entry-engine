@@ -3,6 +3,7 @@ import pandas as pd
 import pytest
 
 from market_engine.features import (
+    add_active_structure_features,
     add_ema_features,
     add_micro_structure_features,
     add_momentum_features,
@@ -436,6 +437,26 @@ def test_micro_structure_features_calculate_context() -> None:
     assert result["high_vs_previous_high_3"].iloc[:3].isna().all()
     assert result["range_vs_avg_3"].iloc[:3].isna().all()
     assert result["range_vs_avg_5"].iloc[:5].isna().all()
+
+
+def test_active_structure_features_use_positional_candle_age() -> None:
+    frame = make_sample_frame(rows=30)
+    shifted = frame.copy()
+    shifted.index = np.arange(100, 100 + len(shifted))
+
+    baseline = add_active_structure_features(frame)
+    result = add_active_structure_features(shifted)
+
+    assert np.allclose(
+        baseline["structure_bars_since_last_swing"].to_numpy(),
+        result["structure_bars_since_last_swing"].to_numpy(),
+        equal_nan=True,
+    )
+    assert np.allclose(
+        baseline["structure_bars_since_last_bos"].to_numpy(),
+        result["structure_bars_since_last_bos"].to_numpy(),
+        equal_nan=True,
+    )
 
 
 def test_build_features_contains_micro_structure_features() -> None:
