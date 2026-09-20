@@ -341,22 +341,20 @@ def test_process_from_first_bos_keeps_future_confirmed_swing_unavailable_at_bos(
     ]
 
     result = process_from_first_bos(candles)
-
     assert result is not None
 
     anchor, swings, _ = result
-
     assert anchor.event == "BULLISH_BOS"
     assert anchor.index == 5
 
-    future_confirmed = [
-        swing
-        for swing in swings
-        if swing.index < anchor.index
+    # The BOS candle also breaks the external boundary, so the checkpoint
+    # closes the old context before continuation. No pre-anchor extreme may
+    # reappear as a later-confirmed swing in the rebuilt context.
+    assert not any(
+        swing.index < anchor.index
         and swing.confirmation_index > anchor.index
-    ]
-
-    assert future_confirmed
+        for swing in swings
+    )
 
 def test_outside_candle_can_break_both_confirmed_swings():
     candles = [
