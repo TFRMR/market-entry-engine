@@ -408,3 +408,38 @@ def test_process_from_first_bos_continues_structure_from_anchor_direction():
     assert future_swings
     assert future_swings[0].swing_type is SwingType.HIGH
     assert future_swings[0].confirmation_index == 9
+
+
+def test_process_from_first_bos_preserves_future_swing_confirmation_time():
+    candles = [
+        StructuralCandle(0, "00:00", 12, 9, 10, 11, CandleKind.UP),
+        StructuralCandle(1, "00:30", 14, 10, 11, 13, CandleKind.UP),
+        StructuralCandle(2, "01:00", 14.5, 11, 13, 14, CandleKind.UP),
+        StructuralCandle(3, "01:30", 13.5, 10, 13, 11, CandleKind.DOWN),
+        StructuralCandle(4, "02:00", 13, 8, 11, 9, CandleKind.DOWN),
+        StructuralCandle(5, "02:30", 20, 9, 9, 11, CandleKind.UP),
+        StructuralCandle(6, "03:00", 21, 12, 11, 20, CandleKind.UP),
+        StructuralCandle(7, "03:30", 20, 10, 20, 11, CandleKind.DOWN),
+        StructuralCandle(8, "04:00", 19, 9, 11, 10, CandleKind.DOWN),
+    ]
+
+    result = process_from_first_bos(candles)
+
+    assert result is not None
+
+    anchor, swings, _ = result
+
+    assert anchor.index == 5
+
+    future_swings = [
+        swing
+        for swing in swings
+        if swing.index != anchor.swing_index
+        and swing.confirmation_index > anchor.index
+    ]
+
+    assert future_swings
+
+    for swing in future_swings:
+        assert swing.confirmation_index > anchor.index
+
