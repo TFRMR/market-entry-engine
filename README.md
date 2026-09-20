@@ -68,8 +68,8 @@ Completed and locked:
 
 Current next step:
 
-- expand the structure feature representation into model-ready context
 - define setup, invalidation, target, and execution-cost semantics
+- keep model inputs derived from deterministic, confirmation-time features
 
 The project deliberately keeps deterministic structure and feature contracts
 ahead of statistical modeling and entry optimization.
