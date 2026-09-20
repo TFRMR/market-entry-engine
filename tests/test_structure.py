@@ -1,6 +1,8 @@
 import pandas as pd
 
 from market_engine.structure import (
+    ValidSwing,
+    _label_swing,
     CandleKind,
     Direction,
     SwingType,
@@ -36,7 +38,7 @@ def test_outside_candle_replaces_contained_reference():
     seq = build_structural_sequence(frame)
     assert seq[1].kind is CandleKind.OUTSIDE
     assert seq[1].index == 1
-    assert seq[2].kind is CandleKind.INSIDE
+    assert [x.index for x in seq] == [0, 1]
 
 
 def test_pullback_break_confirms_historical_extreme_as_swing():
@@ -57,3 +59,32 @@ def test_pullback_break_confirms_historical_extreme_as_swing():
     assert swing.confirmation_index == 4
     assert events[0].event == "SWING_HIGH_VALID"
     assert events[0].direction is Direction.DOWN
+
+def test_valid_swing_labels_compare_previous_same_type():
+    previous_high = ValidSwing(
+        index=10,
+        timestamp="2026-01-01 05:00",
+        price=100.0,
+        swing_type=SwingType.HIGH,
+        confirmation_index=12,
+        confirmation_timestamp="2026-01-01 06:00",
+    )
+    higher_high = ValidSwing(
+        index=20,
+        timestamp="2026-01-01 10:00",
+        price=105.0,
+        swing_type=SwingType.HIGH,
+        confirmation_index=22,
+        confirmation_timestamp="2026-01-01 11:00",
+    )
+    lower_high = ValidSwing(
+        index=30,
+        timestamp="2026-01-01 15:00",
+        price=98.0,
+        swing_type=SwingType.HIGH,
+        confirmation_index=32,
+        confirmation_timestamp="2026-01-01 16:00",
+    )
+
+    assert _label_swing(higher_high, previous_high) == "HH"
+    assert _label_swing(lower_high, previous_high) == "LH"
