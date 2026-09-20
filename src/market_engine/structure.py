@@ -383,3 +383,35 @@ def find_first_bos(candles):
             return event
 
     return None
+
+
+def process_from_first_bos(candles):
+    anchor = find_first_bos(candles)
+
+    if anchor is None:
+        return None
+
+    forward_candles = [
+        candle for candle in candles
+        if candle.index >= anchor.index
+    ]
+
+    swings, events = process_structural_candles(forward_candles)
+
+    return anchor, swings, events
+
+
+def process_from_first_bos(candles):
+    anchor = find_first_bos(candles)
+
+    if anchor is None:
+        return None
+
+    forward_candles = [
+        candle for candle in candles
+        if candle.index >= anchor.index
+    ]
+
+    swings, events = process_structural_candles(forward_candles)
+
+    return anchor, swings, events
