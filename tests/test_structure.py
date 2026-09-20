@@ -345,3 +345,30 @@ def test_outside_candle_can_break_both_confirmed_swings():
     }
     assert [(event.event, event.index) for event in bos] == [("BULLISH_BOS", 6), ("BEARISH_BOS", 7)]
 
+
+
+def test_outside_candle_can_break_both_confirmed_swings_same_candle():
+    candles = [
+        StructuralCandle(0, "00:00", 12, 9, 10, 11, CandleKind.UP),
+        StructuralCandle(1, "00:30", 14, 10, 11, 13, CandleKind.UP),
+        StructuralCandle(2, "01:00", 14.5, 11, 13, 14, CandleKind.UP),
+        StructuralCandle(3, "01:30", 13.5, 10, 13, 11, CandleKind.DOWN),
+        StructuralCandle(4, "02:00", 13, 8, 11, 9, CandleKind.DOWN),
+        StructuralCandle(5, "02:30", 10, 9, 9, 9.5, CandleKind.DOWN),
+        StructuralCandle(6, "03:00", 11, 8.5, 9, 10.5, CandleKind.DOWN),
+        StructuralCandle(7, "03:30", 16, 7, 10, 14, CandleKind.OUTSIDE),
+    ]
+
+    swings, events = process_structural_candles(candles)
+
+    assert [(s.swing_type, s.index, s.confirmation_index) for s in swings] == [
+        (SwingType.HIGH, 2, 4),
+        (SwingType.LOW, 4, 6),
+    ]
+
+    bos = [event for event in events if event.event.endswith("_BOS")]
+
+    assert [(event.event, event.index, event.swing_index) for event in bos] == [
+        ("BULLISH_BOS", 7, 2),
+        ("BEARISH_BOS", 7, 4),
+    ]
