@@ -1,6 +1,6 @@
 # Market Structure Specification v1
 
-Status: LOCKED — implementation baseline  \
+Status: LOCKED — internal/external scope baseline  \
 Scope: deterministic market-structure engine for the Market Entry Engine
 
 ## 1. Core hierarchy
@@ -282,16 +282,25 @@ When the major external boundary is broken, the previous structural context must
 
 No arbitrary price-distance threshold is required to define internal structure; the existing structural boundary defines its scope.
 
-The exact scope transition and rebuild behavior remain the next implementation milestone.
+Scope is assigned from the active external boundary, not from a fixed distance threshold. A valid swing that remains inside the active external high/low boundary is INTERNAL. A break of an active external boundary is EXTERNAL and terminates the previous external context.
+
+### Scope transition
+
+- The active external boundary is the latest confirmed external swing high and external swing low that define the current outer range.
+- A newly confirmed valid swing remains INTERNAL when its price is inside that outer range.
+- An internal swing does not replace the corresponding external boundary.
+- When price breaks an active external boundary, the break is emitted as the applicable BOS event and the previous external context is considered closed.
+- The engine then rebuilds structure forward from the boundary-break candle using only information available at and after that point; it must not retroactively promote prior internal swings to external status.
+- After rebuild, the first newly established structural range becomes the new external context.
+
+This scope model is structural: no arbitrary price-distance, candle-count, or volatility threshold is used.
 
 ## 13. Explicit unresolved items
 
 The following remain before Market Structure v1 is considered complete:
 
 1. Exact recursive reference behavior for nested INSIDE/OUTSIDE sequences.
-2. Exact reset/rebuild rules after an external boundary is broken.
-3. Internal versus external scope transitions.
-4. Exact event ordering for simultaneous structural transitions beyond the currently locked OUTSIDE/extreme-extension rule.
+2. Exact event ordering for simultaneous structural transitions beyond the currently locked OUTSIDE/extreme-extension rule.
 
 Already resolved in the current implementation:
 
@@ -300,7 +309,9 @@ Already resolved in the current implementation:
 - processing can continue from the checkpoint;
 - swing confirmation time is distinct from historical swing location;
 - future-confirmed swings are unavailable before confirmation;
-- BOS targets only previously confirmed valid swings.
+- BOS targets only previously confirmed valid swings;
+- internal/external scope is determined by the active structural boundary;
+- external-boundary breaks terminate the prior external context and trigger forward rebuild without retroactive promotion.
 
 ## 14. Planned validation sequence
 
@@ -319,6 +330,7 @@ Candle validity
 → First BOS / checkpoint
 → Internal structure
 → External boundary break / rebuild
+→ scope transition validation
 ```
 
-This document is the implementation baseline for the deterministic Market Structure layer. Core rules marked above are locked; the remaining items in section 13 must be resolved before Market Structure v1 is closed.
+This document is the implementation baseline for the deterministic Market Structure layer. Core rules marked above are locked. Internal/external scope and external-boundary rebuild are now locked as the next implementation contract; only the remaining section 13 items must be resolved before Market Structure v1 is closed.
