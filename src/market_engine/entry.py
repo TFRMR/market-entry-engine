@@ -8,8 +8,8 @@ import pandas as pd
 
 from market_engine.structure import (
     Direction,
-    SwingType,
     StructureEvent,
+    SwingType,
     ValidSwing,
     build_structural_sequence,
     process_structural_candles,
