@@ -134,7 +134,10 @@ The first active-context feature set now exposes:
 | `structure_bars_since_last_bos` | raw candle-index distance from the latest BOS |
 
 Distance features remain unavailable until the corresponding confirmed swing
-exists. Age features remain unavailable until the corresponding event exists.
+exists. When an external-boundary rebuild closes the active context, the old
+high/low levels are cleared and remain unavailable until a new swing is
+confirmed in the rebuilt context. Age features likewise reflect the active
+context and are not carried across a rebuild.
 
 The context is sampled after each accepted structural candle and then carried
 forward across raw candles that are INSIDE the current structural reference.
@@ -148,6 +151,7 @@ Active context follows the same information-availability rule as event flags:
 - a swing becomes available at confirmation time;
 - BOS age starts at zero on the BOS candle;
 - future structure cannot alter an earlier row;
+- external-boundary rebuilds clear the closed context rather than forward-filling its levels;
 - historical swing location is never substituted for confirmation time.
 
 ## 11. Future extensions
