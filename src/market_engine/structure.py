@@ -293,10 +293,7 @@ def _process_structural_candles(
             broken_low_index = bos_low.index
             last_bos_index = candle.index
 
-        rebuild_after_candle = (
-            external_boundary_broken
-            and not (first_bos and stop_after_first_bos)
-        )
+        rebuild_after_candle = external_boundary_broken
         broke_high = (
             bos_high is not None
             and bos_high.scope is StructureScope.EXTERNAL
