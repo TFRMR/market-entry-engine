@@ -259,6 +259,26 @@ def main() -> None:
                 f"{int(structural_missing.any(axis=1).sum()):,}"
             )
 
+            active_missing_mask = active_missing.any(axis=1)
+            print("  Active-structure availability by label:")
+            availability = pd.DataFrame(
+                {
+                    "label": labeled["label"],
+                    "active_missing": active_missing_mask,
+                }
+            )
+            for label in ("TP_FIRST", "SL_FIRST", "UNRESOLVED"):
+                label_rows = availability[availability["label"] == label]
+                if label_rows.empty:
+                    continue
+                missing_count = int(label_rows["active_missing"].sum())
+                total_count = len(label_rows)
+                print(
+                    f"    {label:10s}: "
+                    f"{missing_count:,}/{total_count:,} missing "
+                    f"({missing_count / total_count * 100:.2f}%)"
+                )
+
             missing_setup_indices = labeled.loc[
                 missing_mask, "setup_index"
             ].astype(int)
