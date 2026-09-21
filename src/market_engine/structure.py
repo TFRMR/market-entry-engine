@@ -266,6 +266,7 @@ def _process_structural_candles(
         )
 
         first_bos = bos_high is not None or bos_low is not None
+        prior_direction = state.direction
         external_boundary_broken = (
             (bos_high is not None and bos_high.scope is StructureScope.EXTERNAL)
             or (bos_low is not None and bos_low.scope is StructureScope.EXTERNAL)
@@ -304,7 +305,7 @@ def _process_structural_candles(
         # CHoCH is a directional transition event derived from a valid-swing
         # break that runs against the canonical direction known before this
         # candle. It is never emitted for the initial BOS.
-        if bos_high is not None and state.direction is Direction.DOWN:
+        if bos_high is not None and prior_direction is Direction.DOWN:
             events.append(
                 StructureEvent(
                     index=candle.index,
@@ -317,7 +318,7 @@ def _process_structural_candles(
                 )
             )
 
-        if bos_low is not None and state.direction is Direction.UP:
+        if bos_low is not None and prior_direction is Direction.UP:
             events.append(
                 StructureEvent(
                     index=candle.index,
@@ -329,8 +330,6 @@ def _process_structural_candles(
                     scope=bos_low.scope,
                 )
             )
-
-        prior_direction = state.direction
 
         rebuild_after_candle = external_boundary_broken
         broke_high = (
