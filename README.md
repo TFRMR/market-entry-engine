@@ -120,7 +120,6 @@ ahead of statistical modeling and entry optimization.
   - Short entry pays spread below the quoted price.
   - Execution risk is recalculated from the executed entry price to invalidation.
   - Raw MT5 `<SPREAD>` is not used directly; conversion to price units belongs to the data/source adapter.
-- [ ] Execution cost model
 - [ ] Deterministic execution baseline
 
 ### Statistical / ML evaluation
