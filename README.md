@@ -69,12 +69,13 @@ Completed and locked:
 - active structural context features
 - historical structural distances for context / POI analysis
 - deterministic entry semantics v1
+- deterministic realized-R audit layer
 
 Current next step:
 
-- implement time-series validation
-- establish leakage-safe train / validation / test splits
-- keep validation chronology explicit
+- run the development realized-R audit
+- compare the observed realized-R distribution with the random-timing placebo
+- keep the result descriptive before any ML or threshold selection
 
 The project deliberately keeps deterministic structure and feature contracts
 ahead of statistical modeling and entry optimization.
@@ -123,7 +124,7 @@ ahead of statistical modeling and entry optimization.
   - Long entry pays spread above the quoted price.
   - Short entry pays spread below the quoted price.
   - Execution risk is recalculated from the executed entry price to invalidation.
-  - Raw MT5 `<SPREAD>` is not used directly; conversion to price units belongs to the data/source adapter.
+  - Raw MT5 SPREAD is not used directly; conversion to price units belongs to the data/source adapter.
 - [x] Deterministic execution baseline
   - Trade outcome is evaluated from candles after setup.
   - Execution price and risk include the modeled spread.
@@ -161,6 +162,12 @@ ahead of statistical modeling and entry optimization.
   - Purge gap defaults to the structural label horizon (10 candles) to prevent forward-label overlap.
   - Explicit embargo gap is supported between validation and test.
   - No shuffling or random split is used.
+- [x] Realized-R audit layer
+  - Realized R uses the existing deterministic setup, execution, and target semantics.
+  - Unresolved setups receive a deterministic TIME_STOP at the horizon close.
+  - reward_r_after_spread is explicitly a target-distance ratio, not full net P&L.
+  - Random-timing placebo is descriptive only.
+  - Day-clustered bootstrap is an uncertainty diagnostic, not a guarantee of independence.
 - [ ] LightGBM baseline
 - [ ] XGBoost baseline
 - [ ] Out-of-sample evaluation
@@ -192,4 +199,4 @@ The current development quality gate is:
 Ruff covers the engine and test suite. Exploratory audit scripts under
 scripts/audit_*.py are intentionally excluded from the production lint scope.
 
-Current checkpoint: active/historical structure separation added; local test gate pending after this change.
+Current checkpoint: realized-R analysis layer added; development audit pending.
