@@ -249,6 +249,7 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     result = add_volume_features(result)
     result = add_structure_event_features(result)
     result = add_active_structure_features(result)
+    result = add_trend_range_features(result)
 
     return result
 
@@ -261,7 +262,8 @@ def build_structural_features(frame: pd.DataFrame) -> pd.DataFrame:
     ablation studies.
     """
     result = add_structure_event_features(frame)
-    return add_active_structure_features(result)
+    result = add_active_structure_features(result)
+    return add_trend_range_features(result)
 
 
 def add_micro_structure_features(frame: pd.DataFrame) -> pd.DataFrame:
@@ -312,6 +314,8 @@ def add_structure_event_features(frame: pd.DataFrame) -> pd.DataFrame:
     event_columns = {
         "structure_bullish_bos": "BULLISH_BOS",
         "structure_bearish_bos": "BEARISH_BOS",
+        "structure_bullish_choch": "BULLISH_CHOCH",
+        "structure_bearish_choch": "BEARISH_CHOCH",
         "structure_swing_high_valid": "SWING_HIGH_VALID",
         "structure_swing_low_valid": "SWING_LOW_VALID",
     }
@@ -475,6 +479,64 @@ def add_active_structure_features(frame: pd.DataFrame) -> pd.DataFrame:
         current_index - pd.Series(last_bos_index, index=result.index)
     )
 
+    return result
+
+
+def add_trend_range_features(frame: pd.DataFrame) -> pd.DataFrame:
+    """Add deterministic trend/regime and structural-range context."""
+    required = {
+        "structure_direction",
+        "structure_last_valid_high",
+        "structure_last_valid_low",
+    }
+    missing = required.difference(frame.columns)
+    if missing:
+        raise ValueError(
+            "Missing structural context columns: " + ", ".join(sorted(missing))
+        )
+
+    result = frame.copy()
+    result["trend_regime"] = np.select(
+        [result["structure_direction"] > 0, result["structure_direction"] < 0],
+        ["BULLISH", "BEARISH"],
+        default="NEUTRAL",
+    )
+
+    bullish_choch = result.get(
+        "structure_bullish_choch", pd.Series(0, index=result.index)
+    )
+    bearish_choch = result.get(
+        "structure_bearish_choch", pd.Series(0, index=result.index)
+    )
+    result["trend_transition"] = (
+        bullish_choch.astype(bool) | bearish_choch.astype(bool)
+    ).astype(int)
+    result["trend_transition_direction"] = np.select(
+        [bullish_choch.astype(bool), bearish_choch.astype(bool)],
+        [1.0, -1.0],
+        default=np.nan,
+    )
+
+    range_high = result["structure_last_valid_high"]
+    range_low = result["structure_last_valid_low"]
+    range_width = range_high - range_low
+    valid_range = range_high.notna() & range_low.notna() & range_width.gt(0)
+
+    result["range_state"] = np.where(valid_range, "DEFINED", "UNDEFINED")
+    result["range_high"] = range_high
+    result["range_low"] = range_low
+    result["range_width"] = range_width.where(valid_range)
+    result["range_position"] = np.nan
+    result.loc[valid_range, "range_position"] = (
+        (result.loc[valid_range, "close"] - range_low[valid_range])
+        / range_width[valid_range]
+    )
+    result["range_position_zone"] = np.select(
+        [result["range_position"].lt(0.33), result["range_position"].gt(0.67)],
+        ["LOW", "HIGH"],
+        default="MID",
+    )
+    result.loc[~valid_range, "range_position_zone"] = "UNDEFINED"
     return result
 
 def add_volume_features(
