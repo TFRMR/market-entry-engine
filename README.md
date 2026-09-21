@@ -132,6 +132,10 @@ ahead of statistical modeling and entry optimization.
   - The nearest valid exit area is used as the deterministic target.
   - Candidates without a valid exit area are skipped.
   - Portfolio sizing and additional transaction costs remain outside this baseline.
+- [x] Backtest result aggregation
+  - Summarizes total trades and counts for `TARGET`, `STOP`, and `OPEN`.
+  - Sums PnL and R-multiple for closed outcomes.
+  - Does not assume position sizing, portfolio allocation, or additional costs.
 
 ### Statistical / ML evaluation
 
@@ -168,4 +172,4 @@ The current development quality gate is:
 Ruff covers the engine and test suite. Exploratory audit scripts under
 `scripts/audit_*.py` are intentionally excluded from the production lint scope.
 
-Current checkpoint: **Ruff clean, 71 tests passing**.
+Current checkpoint: **aggregation implementation added; local test gate still needs to be run.**
