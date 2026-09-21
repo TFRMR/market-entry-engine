@@ -663,8 +663,13 @@ def test_choch_marks_break_against_current_structure_direction():
 
     _, events = process_structural_candles(candles)
 
-    assert [(event.event, event.direction) for event in events if "CHOCH" in event.event] == [
-        ("BEARISH_CHOCH", Direction.DOWN),
+    assert [
+        (event.event, event.direction, event.index)
+        for event in events
+        if "CHOCH" in event.event
+    ] == [
+        ("BULLISH_CHOCH", Direction.UP, 6),
+        ("BEARISH_CHOCH", Direction.DOWN, 7),
     ]
 
 
