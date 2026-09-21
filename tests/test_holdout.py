@@ -7,7 +7,7 @@ from market_engine.holdout import HISTORICAL_AUDIT_CUTOFF, split_historical_boun
 
 def test_historical_boundary_purges_crossing_horizons() -> None:
     frame = pd.DataFrame({"timestamp": pd.date_range("2026-03-15", periods=7, freq="D")})
-    labeled = pd.DataFrame({"setup_index": [0, 1, 2, 3]})
+    labeled = pd.DataFrame({"setup_index": [0, 1, 2, 3, 4, 5, 6]})
 
     development, audit, purged = split_historical_boundary(labeled, frame, horizon=2)
 
