@@ -118,6 +118,29 @@ Quality-gate coverage:
 
 OB is a contextual hypothesis, not a deterministic trade signal.
 
+### Order Block structural contract
+
+- A valid swing is not automatically an Order Block.
+- An Order Block candidate is derived from a confirmed structural swing
+  inside a structural leg that produces a BOS or CHoCH event.
+- Bullish structural events use qualifying LOW swings after the broken HIGH
+  and before the event.
+- Bearish structural events use qualifying HIGH swings after the broken LOW
+  and before the event.
+- Only swings confirmed before the BOS/CHoCH event are eligible.
+- Every qualifying swing is preserved as a candidate; this primitive does not
+  rank or select a single POI.
+- The OB zone is represented by the complete candle range of the candidate
+  swing candle, from wick to wick.
+- `ob_low` is the candidate candle low.
+- `ob_high` is the candidate candle high.
+- `ob_size` is `ob_high - ob_low`.
+- OB, swing, and POI are distinct concepts:
+  `Swing != OB != POI`.
+- POI qualification/ranking such as freshness, mitigation, imbalance/OBIM,
+  structural importance, or higher-timeframe alignment is outside this
+  structural candidate primitive.
+
 ## 4. Liquidity
 
 | Feature | Type | Meaning |
