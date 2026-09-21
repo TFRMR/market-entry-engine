@@ -218,7 +218,7 @@ def main() -> None:
     no_exit_area = candidate_indices - incomplete - labeled_indices
     excluded_other = candidate_indices - incomplete - no_exit_area - labeled_indices
 
-    print("=== Structural Setup Label Audit ===
+    print("=== Structural Setup Label Audit ===")
     print()
     print("Chronological boundary policy:")
     print(f"  Historical audit boundary: {HISTORICAL_AUDIT_CUTOFF}")
