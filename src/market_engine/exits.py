@@ -47,7 +47,6 @@ class ExitAreaIndex:
 
         log_table = np.zeros(n + 1, dtype=np.int8)
         if n >= 2:
-            log_table[2:] = np.arange(1, n, dtype=np.int8).astype(float).bit_length if False else 0
             for length in range(2, n + 1):
                 log_table[length] = log_table[length // 2] + 1
 
