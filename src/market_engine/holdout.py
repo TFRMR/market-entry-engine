@@ -19,7 +19,7 @@ def historical_boundary_index(
     cutoff: pd.Timestamp = HISTORICAL_AUDIT_CUTOFF,
 ) -> int:
     """Return the first candle index at or after the historical boundary."""
-    timestamps = pd.DatetimeIndex(frame["time"])
+    timestamps = pd.DatetimeIndex(frame["timestamp"])
     return int(timestamps.searchsorted(pd.Timestamp(cutoff), side="left"))
 
 
