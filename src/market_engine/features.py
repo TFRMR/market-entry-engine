@@ -250,6 +250,7 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     result = add_structure_event_features(result)
     result = add_active_structure_features(result)
     result = add_trend_range_features(result)
+    result = add_liquidity_features(result)
 
     return result
 
@@ -263,7 +264,8 @@ def build_structural_features(frame: pd.DataFrame) -> pd.DataFrame:
     """
     result = add_structure_event_features(frame)
     result = add_active_structure_features(result)
-    return add_trend_range_features(result)
+    result = add_trend_range_features(result)
+    return add_liquidity_features(result)
 
 
 def add_micro_structure_features(frame: pd.DataFrame) -> pd.DataFrame:
@@ -537,6 +539,65 @@ def add_trend_range_features(frame: pd.DataFrame) -> pd.DataFrame:
         default="MID",
     )
     result.loc[~valid_range, "range_position_zone"] = "UNDEFINED"
+    return result
+
+
+def add_liquidity_features(frame: pd.DataFrame) -> pd.DataFrame:
+    """Add deterministic liquidity levels and sweep events."""
+    required = {
+        "high",
+        "low",
+        "close",
+        "structure_last_valid_high",
+        "structure_last_valid_low",
+    }
+    missing = required.difference(frame.columns)
+    if missing:
+        raise ValueError(
+            "Missing liquidity context columns: " + ", ".join(sorted(missing))
+        )
+
+    result = frame.copy()
+
+    # Only levels confirmed before the current candle are actionable.
+    liquidity_high = result["structure_last_valid_high"].shift(1)
+    liquidity_low = result["structure_last_valid_low"].shift(1)
+
+    result["liquidity_high"] = liquidity_high
+    result["liquidity_low"] = liquidity_low
+    result["liquidity_high_present"] = liquidity_high.notna().astype(int)
+    result["liquidity_low_present"] = liquidity_low.notna().astype(int)
+    result["distance_to_liquidity_high"] = liquidity_high - result["close"]
+    result["distance_to_liquidity_low"] = result["close"] - liquidity_low
+
+    high_sweep = (
+        liquidity_high.notna()
+        & result["high"].gt(liquidity_high)
+        & result["close"].le(liquidity_high)
+    )
+    low_sweep = (
+        liquidity_low.notna()
+        & result["low"].lt(liquidity_low)
+        & result["close"].ge(liquidity_low)
+    )
+
+    result["liquidity_high_sweep"] = high_sweep.astype(int)
+    result["liquidity_low_sweep"] = low_sweep.astype(int)
+    result["liquidity_sweep"] = (high_sweep | low_sweep).astype(int)
+
+    result["liquidity_sweep_direction"] = "NONE"
+    result.loc[high_sweep & ~low_sweep, "liquidity_sweep_direction"] = "BEARISH"
+    result.loc[low_sweep & ~high_sweep, "liquidity_sweep_direction"] = "BULLISH"
+    result.loc[high_sweep & low_sweep, "liquidity_sweep_direction"] = "BOTH"
+
+    result["liquidity_sweep_size"] = np.nan
+    result.loc[high_sweep, "liquidity_sweep_size"] = (
+        result.loc[high_sweep, "high"] - liquidity_high[high_sweep]
+    )
+    result.loc[low_sweep, "liquidity_sweep_size"] = (
+        liquidity_low[low_sweep] - result.loc[low_sweep, "low"]
+    )
+
     return result
 
 def add_volume_features(
