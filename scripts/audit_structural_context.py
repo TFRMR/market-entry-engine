@@ -121,9 +121,6 @@ def main() -> None:
     )
 
     structural_features = build_structural_features(frame)
-    fact_context = SetupFactContext.build(swings, events)
-    candidate_by_index = {candidate.setup_index: candidate for candidate in candidates}
-
     rows: list[dict[str, object]] = []
     pre_columns = (
         "structure_direction",
