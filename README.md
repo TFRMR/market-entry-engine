@@ -65,7 +65,9 @@ Completed and locked:
 - external-boundary break and structure rebuild
 - deterministic simultaneous-event ordering
 - confirmation-time structure feature contract
+- active vs historical structural context separation
 - active structural context features
+- historical structural distances for context / POI analysis
 - deterministic entry semantics v1
 
 Current next step:
@@ -101,6 +103,8 @@ ahead of statistical modeling and entry optimization.
 - [x] StructureCheckpoint / forward continuation
 - [x] Internal / external structure
 - [x] External boundary break / rebuild
+- [x] Preserve historical confirmed structure across active-context rebuilds
+- [x] Expose historical structure context separately from active structure
 - [x] Close Market Structure v1 specification
 
 ### Context and entry engine
@@ -188,4 +192,4 @@ The current development quality gate is:
 Ruff covers the engine and test suite. Exploratory audit scripts under
 scripts/audit_*.py are intentionally excluded from the production lint scope.
 
-Current checkpoint: structural setup label builder and leakage-safe time-series split added; local test gate pending after this change.
+Current checkpoint: active/historical structure separation added; local test gate pending after this change.
