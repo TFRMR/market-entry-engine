@@ -144,9 +144,9 @@ def test_structural_feature_builder_excludes_legacy_columns():
 
     added = [column for column in result.columns if column not in frame.columns]
     assert added
-    assert all(column.startswith("structure_") for column in added)
     for legacy in ("ema_20", "atr_14", "previous_high_20", "volume_ratio_20"):
         assert legacy not in result.columns
+    assert {"trend_regime", "range_state", "range_position"} <= set(result.columns)
 
 
 def test_label_dataset_adds_setup_facts_only_when_events_are_given():
