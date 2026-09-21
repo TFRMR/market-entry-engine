@@ -210,6 +210,36 @@ def main() -> None:
             ).items():
                 print(f"    {column:34s}: {int(count):5d}")
 
+            structural_missing_columns = (
+                "structure_distance_to_high",
+                "structure_distance_to_low",
+                "structure_bars_since_last_swing",
+            )
+            structural_missing = feature_values[list(
+                structural_missing_columns
+            )].isna()
+            print("  Structural missingness profile:")
+            print(
+                "    distance_to_high missing: "
+                f"{int(structural_missing['structure_distance_to_high'].sum()):,}"
+            )
+            print(
+                "    distance_to_low missing:  "
+                f"{int(structural_missing['structure_distance_to_low'].sum()):,}"
+            )
+            print(
+                "    bars_since_swing missing: "
+                f"{int(structural_missing['structure_bars_since_last_swing'].sum()):,}"
+            )
+            print(
+                "    both distances missing:   "
+                f"{int(structural_missing[['structure_distance_to_high', 'structure_distance_to_low']].all(axis=1).sum()):,}"
+            )
+            print(
+                "    any structural missing:    "
+                f"{int(structural_missing.any(axis=1).sum()):,}"
+            )
+
             missing_setup_indices = labeled.loc[
                 missing_mask, "setup_index"
             ].astype(int)
