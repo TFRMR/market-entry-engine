@@ -242,6 +242,35 @@ def main() -> None:
                 f"  {column:34s}: median {values.median():9.4f}  "
                 f"missing {int(values.isna().sum()):5d}"
             )
+        print("Setup facts × label:")
+        fact_summary = labeled[["label", *SETUP_FACT_COLUMNS]].copy()
+        for column in SETUP_FACT_COLUMNS:
+            print(f"  {column}:")
+            grouped = fact_summary.groupby("label")[column].agg(["count", "median", "mean"])
+            for label in ("TP_FIRST", "SL_FIRST", "UNRESOLVED"):
+                if label not in grouped.index:
+                    continue
+                row = grouped.loc[label]
+                print(
+                    f"    {label:10s}: n={int(row['count']):4d} "
+                    f"median={row['median']:.4f} mean={row['mean']:.4f}"
+                )
+        print()
+        external = labeled["setup_bos_external"].astype(float)
+        print("BOS scope × label:")
+        scope_table = pd.crosstab(
+            external.map({1.0: "EXTERNAL", 0.0: "INTERNAL"}),
+            labeled["label"],
+        )
+        for scope in ("EXTERNAL", "INTERNAL"):
+            row = scope_table.loc[scope] if scope in scope_table.index else pd.Series(dtype=int)
+            total = int(row.sum()) if not row.empty else 0
+            parts = []
+            for label in ("TP_FIRST", "SL_FIRST", "UNRESOLVED"):
+                count = int(row.get(label, 0))
+                pct = count / total * 100 if total else 0.0
+                parts.append(f"{label}={count} ({pct:.2f}%)")
+            print(f"  {scope:8s}: n={total:4d}  " + "  ".join(parts))
         print()
     if args.with_features:
         print("Features:")
