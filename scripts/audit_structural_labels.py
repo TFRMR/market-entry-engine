@@ -9,7 +9,6 @@ import pandas as pd
 
 from market_engine.data import load_mt5_csv
 from market_engine.entry import build_setup_candidates
-from market_engine.exits import ExitAreaIndex
 from market_engine.features import build_features
 from market_engine.labels import (
     STRUCTURAL_LABEL_HORIZON,
@@ -122,7 +121,6 @@ def main() -> None:
     candidates = build_setup_candidates(frame)
     structural = build_structural_sequence(frame)
     swings, _ = process_structural_candles(structural)
-    exit_index = ExitAreaIndex.build(frame)
     feature_frame = build_features(frame) if args.with_features else None
 
     labeled = build_setup_label_dataset(
