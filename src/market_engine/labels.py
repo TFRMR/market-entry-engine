@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Final
 
-
 TP_FIRST: Final[str] = "TP_FIRST"
 SL_FIRST: Final[str] = "SL_FIRST"
 BOTH_SAME_CANDLE: Final[str] = "BOTH_SAME_CANDLE"
