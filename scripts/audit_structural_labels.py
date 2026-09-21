@@ -316,7 +316,7 @@ def main() -> None:
                 f"{int(structural_missing.any(axis=1).sum()):,}"
             )
 
-            active_missing_mask = active_missing.any(axis=1)
+            active_missing_mask = structural_missing.any(axis=1)
             print("  Active-structure availability by label:")
             availability = pd.DataFrame(
                 {
