@@ -196,8 +196,7 @@ def main() -> None:
         selected_candidates = [
             candidate
             for candidate in candidates
-            if candidate.setup_index + args.horizon < len(frame)
-            and (
+            if (
                 candidate.setup_index + args.horizon < boundary_index
                 or candidate.setup_index >= boundary_index
             )
