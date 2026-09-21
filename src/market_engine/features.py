@@ -522,7 +522,16 @@ def add_trend_range_features(frame: pd.DataFrame) -> pd.DataFrame:
     range_high = result["structure_last_valid_high"]
     range_low = result["structure_last_valid_low"]
     range_width = range_high - range_low
-    valid_range = range_high.notna() & range_low.notna() & range_width.gt(0)
+
+    # A structural range is valid only when the canonical structure
+    # direction is already established and both confirmed swing levels
+    # form a positive-width range.
+    valid_range = (
+        result["structure_direction"].ne(0)
+        & range_high.notna()
+        & range_low.notna()
+        & range_width.gt(0)
+    )
 
     result["range_state"] = np.where(valid_range, "DEFINED", "UNDEFINED")
     result["range_high"] = range_high

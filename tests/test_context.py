@@ -84,9 +84,11 @@ def make_liquidity_frame() -> pd.DataFrame:
 def test_liquidity_uses_pre_candle_confirmed_levels() -> None:
     result = add_liquidity_features(make_liquidity_frame())
 
+    # Liquidity must come from confirmed structural levels,
+    # not from the previous candle's raw high/low.
     assert pd.isna(result.loc[0, "liquidity_high"])
-    assert result.loc[1, "liquidity_high"] == 105.0
-    assert result.loc[1, "liquidity_low"] == 95.0
+    assert pd.isna(result.loc[1, "liquidity_high"])
+    assert pd.isna(result.loc[1, "liquidity_low"])
     assert result.loc[2, "liquidity_high"] == 120.0
     assert result.loc[2, "liquidity_low"] == 100.0
 
@@ -95,8 +97,9 @@ def test_high_liquidity_sweep_requires_reclaim() -> None:
     result = add_liquidity_features(make_liquidity_frame())
 
     assert result.loc[2, "liquidity_high_sweep"] == 1
+    assert result.loc[2, "liquidity_low_sweep"] == 1
     assert result.loc[2, "liquidity_sweep"] == 1
-    assert result.loc[2, "liquidity_sweep_direction"] == "BEARISH"
+    assert result.loc[2, "liquidity_sweep_direction"] == "BOTH"
     assert result.loc[2, "liquidity_sweep_size"] == 1.0
     assert result.loc[1, "liquidity_high_sweep"] == 0
 
