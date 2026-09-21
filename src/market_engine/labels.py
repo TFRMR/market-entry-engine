@@ -70,7 +70,9 @@ def build_setup_label_dataset(
     if horizon <= 0:
         raise ValueError("horizon must be greater than zero.")
 
-    requested_feature_columns = tuple(dict.fromkeys((*feature_columns, *pre_feature_columns)))
+    requested_feature_columns = tuple(
+        dict.fromkeys((*feature_columns, *pre_feature_columns))
+    )
 
     if requested_feature_columns and feature_frame is None:
         raise ValueError("feature_frame is required when feature columns are requested.")
@@ -138,7 +140,9 @@ def build_setup_label_dataset(
                 row[column] = feature_frame.iloc[candidate.setup_index][column]
             if pre_feature_columns:
                 if candidate.setup_index <= 0:
-                    raise ValueError("pre-setup features require a candle before the setup candle.")
+                    raise ValueError(
+                        "pre-setup features require a candle before the setup candle."
+                    )
                 for column in pre_feature_columns:
                     row[f"pre_{column}"] = feature_frame.iloc[candidate.setup_index - 1][column]
 
