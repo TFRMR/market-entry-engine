@@ -308,17 +308,22 @@ The data must determine whether EMA alignment actually changes the outcome of mo
 
 # 7. Support and Resistance Context
 
-Support/resistance is included as a **research feature group**, not as a predefined signal.
+Support/resistance is included as a **research context feature group**, not as a predefined trading signal.
 
 The initial objective is to determine whether the location of a momentum candle relative to recent price structure affects continuation probability.
 
-Potential structural references include:
+The canonical v1 S/R definition uses confirmed structural swings.
+
+A swing confirmed on candle `t` is available to the location layer on candle `t`. This confirmation-time boundary is intentionally different from the stricter post-confirmation boundary used when structural BOS consumes swings. `HIGH` swings are resistance candidates and `LOW` swings are support candidates. Only swings with `confirmation_index <= current candle index` are available. Support is the nearest confirmed `LOW <= close`; resistance is the nearest confirmed `HIGH >= close`. If no qualifying level exists, the value is `NaN`.
+
+
+Legacy rolling references remain available for research and ablation:
 
 ```text
-recent_high_20
-recent_low_20
-recent_high_50
-recent_low_50
+previous_high_20
+previous_low_20
+previous_high_50
+previous_low_50
 ```
 
 The implementation must avoid using the current candle's high/low when calculating a **pre-existing** resistance/support level.
@@ -338,11 +343,27 @@ highest high including the current candle
 
 This distinction is important for avoiding look-ahead contamination in structure features.
 
+Canonical location fields:
+
+```text
+support_level
+resistance_level
+distance_to_support
+distance_to_resistance
+distance_to_support_atr
+distance_to_resistance_atr
+distance_to_next_structure_level
+distance_to_next_structure_level_atr
+leg_position
+```
+
+ATR only normalizes structural distance; it does not define S/R. In `UP`, next structure is the nearest confirmed `HIGH` strictly above close. In `DOWN`, it is the nearest confirmed `LOW` strictly below close. Nearest FVG, order block, and liquidity location features remain deferred.
+
 ---
 
 # 8. Distance to Structure
 
-Potential features:
+Legacy distance features:
 
 ```text
 distance_to_previous_high_20

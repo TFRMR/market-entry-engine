@@ -2,7 +2,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from market_engine.features import add_liquidity_features, add_trend_range_features
+from market_engine.features import (
+    add_liquidity_features,
+    add_sr_location_features,
+    add_trend_range_features,
+)
+from market_engine.structure import StructureScope, SwingType, ValidSwing
 
 
 def make_context_frame() -> pd.DataFrame:
@@ -124,3 +129,173 @@ def test_liquidity_requires_structural_levels() -> None:
 
     with pytest.raises(ValueError, match="Missing liquidity context columns"):
         add_liquidity_features(frame)
+
+
+
+def make_sr_location_frame() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "timestamp": pd.date_range(
+                "2026-01-01",
+                periods=5,
+                freq="30min",
+            ),
+            "high": [105.0, 110.0, 115.0, 120.0, 125.0],
+            "low": [95.0, 100.0, 105.0, 110.0, 115.0],
+            "close": [100.0, 108.0, 100.0, 100.0, 118.0],
+            "structure_direction": [1.0, 1.0, 1.0, 1.0, 1.0],
+            "range_position": [0.2, 0.3, 0.4, 0.6, 0.8],
+            "atr_14": [2.0, 2.0, 2.0, 2.0, 2.0],
+        }
+    )
+
+
+def make_sr_swing(
+    swing_type: SwingType,
+    confirmation_index: int,
+    price: float,
+) -> ValidSwing:
+    timestamp = pd.Timestamp("2026-01-01") + pd.Timedelta(
+        minutes=30 * (confirmation_index - 1)
+    )
+    confirmation_timestamp = pd.Timestamp("2026-01-01") + pd.Timedelta(
+        minutes=30 * confirmation_index
+    )
+
+    return ValidSwing(
+        index=confirmation_index - 1,
+        timestamp=timestamp,
+        price=price,
+        swing_type=swing_type,
+        confirmation_index=confirmation_index,
+        confirmation_timestamp=confirmation_timestamp,
+        scope=StructureScope.EXTERNAL,
+    )
+
+
+def test_sr_location_uses_confirmed_structural_swings_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    frame = make_sr_location_frame()
+
+    swings = [
+        make_sr_swing(SwingType.HIGH, 2, 105.0),
+        make_sr_swing(SwingType.LOW, 2, 95.0),
+        make_sr_swing(SwingType.HIGH, 4, 120.0),
+    ]
+
+    monkeypatch.setattr(
+        "market_engine.features.process_structural_candles",
+        lambda _frame: (swings, []),
+    )
+    monkeypatch.setattr(
+        "market_engine.features.build_structural_sequence",
+        lambda input_frame: input_frame.copy(),
+    )
+
+    result = add_sr_location_features(frame)
+
+    # Swing confirmed at candle 2 is unavailable on candles 0 and 1.
+    assert pd.isna(result.loc[1, "support_level"])
+    assert pd.isna(result.loc[1, "resistance_level"])
+
+    # At confirmation time, both historical levels become available.
+    assert result.loc[2, "support_level"] == 95.0
+    assert result.loc[2, "resistance_level"] == 105.0
+
+    # The later high is unavailable before its confirmation candle.
+    assert result.loc[3, "resistance_level"] == 105.0
+    assert result.loc[4, "resistance_level"] == 120.0
+
+
+def test_sr_location_selects_nearest_structural_levels(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    frame = make_sr_location_frame()
+
+    swings = [
+        make_sr_swing(SwingType.LOW, 0, 90.0),
+        make_sr_swing(SwingType.LOW, 0, 100.0),
+        make_sr_swing(SwingType.HIGH, 0, 115.0),
+        make_sr_swing(SwingType.HIGH, 0, 130.0),
+    ]
+
+    monkeypatch.setattr(
+        "market_engine.features.process_structural_candles",
+        lambda _frame: (swings, []),
+    )
+    monkeypatch.setattr(
+        "market_engine.features.build_structural_sequence",
+        lambda input_frame: input_frame.copy(),
+    )
+
+    result = add_sr_location_features(frame.iloc[[0]].copy())
+
+    assert result.loc[0, "support_level"] == 100.0
+    assert result.loc[0, "resistance_level"] == 115.0
+    assert result.loc[0, "distance_to_support"] == 0.0
+    assert result.loc[0, "distance_to_resistance"] == 15.0
+
+
+def test_sr_location_next_structure_level_follows_direction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    frame = make_sr_location_frame()
+
+    swings = [
+        make_sr_swing(SwingType.LOW, 0, 95.0),
+        make_sr_swing(SwingType.HIGH, 0, 105.0),
+        make_sr_swing(SwingType.HIGH, 0, 125.0),
+        make_sr_swing(SwingType.LOW, 0, 90.0),
+    ]
+
+    monkeypatch.setattr(
+        "market_engine.features.process_structural_candles",
+        lambda _frame: (swings, []),
+    )
+    monkeypatch.setattr(
+        "market_engine.features.build_structural_sequence",
+        lambda input_frame: input_frame.copy(),
+    )
+
+    up_frame = frame.iloc[[1]].copy()
+    up_frame.loc[1, "close"] = 108.0
+    up_frame.loc[1, "structure_direction"] = 1.0
+
+    down_frame = frame.iloc[[1]].copy()
+    down_frame.loc[1, "close"] = 108.0
+    down_frame.loc[1, "structure_direction"] = -1.0
+
+    up_result = add_sr_location_features(up_frame)
+    down_result = add_sr_location_features(down_frame)
+
+    assert up_result.loc[1, "distance_to_next_structure_level"] == 17.0
+    assert down_result.loc[1, "distance_to_next_structure_level"] == 13.0
+
+
+def test_sr_location_normalizes_distance_by_current_atr(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    frame = make_sr_location_frame().iloc[[0]].copy()
+
+    swings = [
+        make_sr_swing(SwingType.LOW, 0, 95.0),
+        make_sr_swing(SwingType.HIGH, 0, 110.0),
+    ]
+
+    monkeypatch.setattr(
+        "market_engine.features.process_structural_candles",
+        lambda _frame: (swings, []),
+    )
+    monkeypatch.setattr(
+        "market_engine.features.build_structural_sequence",
+        lambda input_frame: input_frame.copy(),
+    )
+
+    result = add_sr_location_features(frame)
+
+    assert result.loc[0, "distance_to_support"] == 5.0
+    assert result.loc[0, "distance_to_resistance"] == 10.0
+    assert result.loc[0, "distance_to_support_atr"] == 2.5
+    assert result.loc[0, "distance_to_resistance_atr"] == 5.0
+    assert result.loc[0, "leg_position"] == 0.2

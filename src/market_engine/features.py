@@ -385,6 +385,135 @@ def add_order_block_features(frame: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
+def add_sr_location_features(frame: pd.DataFrame) -> pd.DataFrame:
+    """Add confirmed structural S/R and deterministic location context."""
+    required = {
+        "high",
+        "low",
+        "close",
+        "structure_direction",
+    }
+    missing = required.difference(frame.columns)
+    if missing:
+        raise ValueError(
+            "Missing S/R and location columns: "
+            + ", ".join(sorted(missing))
+        )
+
+    result = frame.copy()
+    size = len(result)
+
+    structural = build_structural_sequence(result)
+    swings, _ = process_structural_candles(structural)
+
+    swings_by_confirmation = {}
+    for swing in swings:
+        swings_by_confirmation.setdefault(
+            swing.confirmation_index,
+            [],
+        ).append(swing)
+
+    close = result["close"].to_numpy(dtype=float)
+    direction = result["structure_direction"].to_numpy(dtype=float)
+
+    support = np.full(size, np.nan)
+    resistance = np.full(size, np.nan)
+    next_structure = np.full(size, np.nan)
+
+    confirmed_highs = []
+    confirmed_lows = []
+
+    for position in range(size):
+        for swing in swings_by_confirmation.get(position, []):
+            if swing.swing_type is SwingType.HIGH:
+                confirmed_highs.append(float(swing.price))
+            else:
+                confirmed_lows.append(float(swing.price))
+
+        current_close = close[position]
+
+        supports = [
+            level
+            for level in confirmed_lows
+            if level <= current_close
+        ]
+        resistances = [
+            level
+            for level in confirmed_highs
+            if level >= current_close
+        ]
+
+        if supports:
+            support[position] = max(supports)
+
+        if resistances:
+            resistance[position] = min(resistances)
+
+        if direction[position] > 0:
+            next_levels = [
+                level
+                for level in confirmed_highs
+                if level > current_close
+            ]
+            if next_levels:
+                next_structure[position] = min(next_levels)
+
+        elif direction[position] < 0:
+            next_levels = [
+                level
+                for level in confirmed_lows
+                if level < current_close
+            ]
+            if next_levels:
+                next_structure[position] = max(next_levels)
+
+    result["support_level"] = support
+    result["resistance_level"] = resistance
+
+    result["distance_to_support"] = close - support
+    result["distance_to_resistance"] = resistance - close
+
+    result["distance_to_support_atr"] = np.nan
+    result["distance_to_resistance_atr"] = np.nan
+    result["distance_to_next_structure_level"] = np.nan
+    result["distance_to_next_structure_level_atr"] = np.nan
+
+    valid_next = np.isfinite(next_structure)
+    next_distance = np.full(size, np.nan)
+    next_distance[valid_next] = np.abs(
+        next_structure[valid_next] - close[valid_next]
+    )
+    result["distance_to_next_structure_level"] = next_distance
+
+    if "atr_14" in result.columns:
+        atr = result["atr_14"].to_numpy(dtype=float)
+        valid_atr = np.isfinite(atr) & (atr > 0)
+
+        support_distance = result["distance_to_support"].to_numpy(dtype=float)
+        resistance_distance = result["distance_to_resistance"].to_numpy(dtype=float)
+
+        valid_support = valid_atr & np.isfinite(support_distance)
+        valid_resistance = valid_atr & np.isfinite(resistance_distance)
+        valid_next_atr = valid_atr & np.isfinite(next_distance)
+
+        result.loc[valid_support, "distance_to_support_atr"] = (
+            support_distance[valid_support] / atr[valid_support]
+        )
+        result.loc[valid_resistance, "distance_to_resistance_atr"] = (
+            resistance_distance[valid_resistance] / atr[valid_resistance]
+        )
+        result.loc[valid_next_atr, "distance_to_next_structure_level_atr"] = (
+            next_distance[valid_next_atr] / atr[valid_next_atr]
+        )
+
+    result["leg_position"] = result.get(
+        "range_position",
+        pd.Series(np.nan, index=result.index),
+    )
+
+    return result
+
+
 def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     """Build the current initial feature set."""
     result = add_momentum_features(frame)
@@ -400,6 +529,7 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     result = add_trend_range_features(result)
     result = add_liquidity_features(result)
     result = add_order_block_features(result)
+    result = add_sr_location_features(result)
 
     return result
 

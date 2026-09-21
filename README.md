@@ -46,8 +46,8 @@ Early development.
 
 ### Current engineering position
 
-The deterministic Market Structure v1 layer is locked before context,
-machine learning, and entry optimization.
+The deterministic Market Structure v1 is locked, while Context v1 is being
+locked incrementally before machine learning and entry optimization.
 
 Completed and locked:
 
@@ -70,15 +70,19 @@ Completed and locked:
 - historical structural distances for context / POI analysis
 - deterministic entry semantics v1
 - deterministic realized-R audit layer
+- deterministic Context v1 trend/regime and range semantics
+- deterministic Context v1 liquidity semantics
+- deterministic FVG context
+- deterministic Order Block structural candidate and historical directional projection
+- deterministic canonical structural S/R and Location v1
 
 Current next step:
 
-- stability audit complete: persistent context contrasts are carried forward as candidates, not thresholds
-- implement deterministic Context v1 trend/regime and range semantics
-- implement deterministic Context v1 liquidity semantics
-- enrich context in small deterministic layers: trend/regime + range first, then liquidity, FVG, order block, S/R, location, displacement, pullback state, and event sequence
-- Order Block is currently implemented as a confirmed structural candidate layer plus historical directional feature projection; POI ranking remains separate
-- audit each layer for as-of correctness before ML feature selection
+- continue deterministic context enrichment with displacement / price action
+- then implement pullback state and event sequence
+- audit each layer for as-of correctness and full context leakage before ML feature selection
+- keep Order Block POI ranking separate from the primitive candidate/projection layer
+- evaluate HTF context separately later, with D1 as priority and H4 as supporting/fallback context
 
 The project deliberately keeps deterministic structure and feature contracts
 ahead of statistical modeling and entry optimization.
@@ -203,4 +207,4 @@ The current development quality gate is:
 Ruff covers the engine and test suite. Exploratory audit scripts under
 scripts/audit_*.py are intentionally excluded from the production lint scope.
 
-Current checkpoint: Market Structure v1 is locked, including deterministic CHoCH semantics; trend/regime and range context are implemented and quality-gated; next step is deterministic liquidity context.
+Current checkpoint: Market Structure v1 is locked, including deterministic CHoCH semantics; Context v1 trend/regime, range, liquidity, FVG, Order Block, and canonical structural S/R + Location are implemented and quality-gated; next step is deterministic displacement / price action.

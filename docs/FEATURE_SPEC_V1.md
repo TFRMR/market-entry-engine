@@ -227,13 +227,61 @@ ATR is normalization/context, not a fixed TP/SL rule.
 
 ## 9. Location
 
-- distance_to_support_atr
-- distance_to_resistance_atr
-- leg_position
-- distance_to_next_structure_level_atr
-- distance_to_nearest_fvg_atr
-- distance_to_nearest_ob_atr
-- distance_to_nearest_liquidity_atr
+Location v1 uses confirmed structural swings as the canonical support/resistance
+reference. Rolling 20/50-bar highs and lows remain available through the legacy
+research feature group, but are not the canonical structural S/R definition.
+
+### 9.1 Canonical structural support/resistance
+
+- `HIGH` swing → resistance candidate
+- `LOW` swing → support candidate
+- only swings whose `confirmation_index <= current candle index` are available
+- support = nearest confirmed `LOW <= close`
+- resistance = nearest confirmed `HIGH >= close`
+- if no qualifying level exists on the relevant side, the value is `NaN`
+
+The confirmation boundary is intentionally based on when the swing becomes
+known. A swing confirmed on candle `t` is therefore available for location
+features on candle `t`, while structural BOS logic retains its stricter
+post-confirmation boundary.
+
+### 9.2 Distance features
+
+Canonical location exposes both raw price distance and ATR-normalized distance:
+
+- `support_level`
+- `resistance_level`
+- `distance_to_support`
+- `distance_to_resistance`
+- `distance_to_support_atr`
+- `distance_to_resistance_atr`
+- `distance_to_next_structure_level`
+- `distance_to_next_structure_level_atr`
+
+ATR is used only to normalize an already-defined structural distance. It does
+not define support, resistance, or structural levels.
+
+ATR-normalized values are `NaN` when ATR is unavailable, non-finite, or not
+positive.
+
+### 9.3 Directional next structure
+
+`distance_to_next_structure_level` is direction-aware:
+
+- in `UP`, use the nearest confirmed `HIGH` strictly above the current close
+- in `DOWN`, use the nearest confirmed `LOW` strictly below the current close
+- with no valid directional level, the value is `NaN`
+
+### 9.4 Leg position
+
+`leg_position` is the existing structural `range_position` projected into the
+location layer. It is not independently recomputed from rolling S/R levels.
+
+### 9.5 Deferred location references
+
+Nearest FVG, order block, and liquidity location features are intentionally
+not part of Location v1 yet. Their object-selection and "nearest" semantics
+must be specified explicitly before implementation.
 
 ## 10. MTF
 
