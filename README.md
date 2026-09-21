@@ -74,7 +74,7 @@ Completed and locked:
 Current next step:
 
 - stability audit complete: persistent context contrasts are carried forward as candidates, not thresholds
-- lock deterministic Context v1 semantics, starting with CHoCH as a structure-transition event
+- lock deterministic Context v1 semantics, starting with trend/regime and range
 - enrich context in small deterministic layers: trend/regime, range, liquidity, FVG, order block, S/R, location, displacement, pullback state, and event sequence
 - audit each layer for as-of correctness before ML feature selection
 
@@ -201,4 +201,4 @@ The current development quality gate is:
 Ruff covers the engine and test suite. Exploratory audit scripts under
 scripts/audit_*.py are intentionally excluded from the production lint scope.
 
-Current checkpoint: structural-context stability audit completed on the development partition; results are logged in docs/EXPERIMENT_LOG.md. Next step is deterministic Context v1 enrichment, beginning with CHoCH.
+Current checkpoint: Market Structure v1 is locked, including deterministic CHoCH semantics; structural-context stability audit results are logged in docs/EXPERIMENT_LOG.md. Next step is deterministic Context v1 enrichment, beginning with trend/regime and range.
