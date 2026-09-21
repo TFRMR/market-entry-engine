@@ -6,7 +6,10 @@ import pandas as pd
 
 import market_engine.labels as labels_module
 from market_engine.entry import SetupCandidate
-from market_engine.labels import PRE_SETUP_FEATURE_COLUMNS, build_setup_label_dataset
+from market_engine.labels import (
+    PRE_SETUP_FEATURE_COLUMNS,
+    build_setup_label_dataset,
+)
 from market_engine.structure import Direction
 
 
