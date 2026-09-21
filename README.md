@@ -73,9 +73,10 @@ Completed and locked:
 
 Current next step:
 
-- run the development realized-R audit
-- compare the observed realized-R distribution with the random-timing placebo
-- keep the result descriptive before any ML or threshold selection
+- run the predefined structural-context stability audit across chronological development slices
+- repeat the same locked context analysis at spreads 0.00 / 0.16 / 0.30 / 0.50
+- require persistent context direction across time and execution cost before ML feature selection
+- do not tune thresholds or select a best bucket from this audit
 
 The project deliberately keeps deterministic structure and feature contracts
 ahead of statistical modeling and entry optimization.
