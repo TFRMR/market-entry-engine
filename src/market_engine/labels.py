@@ -45,7 +45,7 @@ def build_setup_label_dataset(
     candidates: list[SetupCandidate],
     swings: list[ValidSwing],
     frame: pd.DataFrame,
-    feature_frame: pd.DataFrame,
+    feature_frame: pd.DataFrame | None,
     spread_price: float,
     feature_columns: tuple[str, ...],
     horizon: int = STRUCTURAL_LABEL_HORIZON,
@@ -59,14 +59,18 @@ def build_setup_label_dataset(
     if horizon <= 0:
         raise ValueError("horizon must be greater than zero.")
 
-    if len(feature_frame) != len(frame):
-        raise ValueError("feature_frame must have the same length as frame.")
+    if feature_columns and feature_frame is None:
+        raise ValueError("feature_frame is required when feature_columns are requested.")
 
-    missing = sorted(set(feature_columns) - set(feature_frame.columns))
-    if missing:
-        raise ValueError(
-            f"feature_frame is missing required columns: {', '.join(missing)}"
-        )
+    if feature_frame is not None:
+        if len(feature_frame) != len(frame):
+            raise ValueError("feature_frame must have the same length as frame.")
+
+        missing = sorted(set(feature_columns) - set(feature_frame.columns))
+        if missing:
+            raise ValueError(
+                f"feature_frame is missing required columns: {', '.join(missing)}"
+            )
 
     rows: list[dict[str, object]] = []
 
@@ -109,8 +113,9 @@ def build_setup_label_dataset(
             "label": label_from_trade_outcome(outcome),
         }
 
-        for column in feature_columns:
-            row[column] = feature_frame.iloc[candidate.setup_index][column]
+        if feature_frame is not None:
+            for column in feature_columns:
+                row[column] = feature_frame.iloc[candidate.setup_index][column]
 
         rows.append(row)
 
