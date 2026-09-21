@@ -1,8 +1,7 @@
 import pandas as pd
 import pytest
 
-from market_engine.backtest import run_backtest
-from market_engine.backtest import run_backtest_trades
+from market_engine.backtest import run_backtest, run_backtest_trades
 from market_engine.entry import SetupCandidate
 from market_engine.stats import summarize_backtest
 from market_engine.structure import Direction, SwingType, ValidSwing
