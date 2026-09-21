@@ -359,9 +359,39 @@ leg_position
 
 ATR only normalizes structural distance; it does not define S/R. In `UP`, next structure is the nearest confirmed `HIGH` strictly above close. In `DOWN`, it is the nearest confirmed `LOW` strictly below close. Nearest FVG, order block, and liquidity location features remain deferred.
 
+# 8. FVG Reference Layer
+
+FVG transition analysis requires all historical FVG references, not only the latest FVG exposed by the existing feature context.
+
+`FVGReference` is an immutable historical object containing:
+
+```text
+creation_index
+direction
+lower
+upper
+size
+creation_timestamp
+```
+
+The reference is created on candle `t` using only candles `t-2` and `t`:
+
+```text
+bullish: low[t] > high[t-2]
+bearish: high[t] < low[t-2]
+```
+
+Both comparisons are strict, so equal boundaries do not create a gap.
+
+The reference becomes available on its creation candle. The builder preserves all valid historical FVGs in chronological creation order.
+
+This layer is deliberately separate from `add_fvg_features()`, whose existing contract is to expose only the latest historical FVG context.
+
+`FVGReference` does not contain target, previous/next, interaction, rejection, or transition-outcome fields. Those concepts belong to the later FVG Transition layer and require their own temporal definitions.
+
 ---
 
-# 8. Distance to Structure
+# 9. Distance to Structure
 
 Legacy distance features:
 
@@ -395,7 +425,7 @@ These are hypotheses to test, not assumptions.
 
 ---
 
-# 9. Breakout Context
+# 10. Breakout Context
 
 A momentum candle may occur:
 
@@ -432,7 +462,7 @@ The analysis should distinguish breakout momentum from momentum occurring withou
 
 ---
 
-# 10. Recent Price Context
+# 11. Recent Price Context
 
 The system should know what happened immediately before the momentum candle.
 
@@ -460,7 +490,7 @@ Again, these relationships should be discovered empirically.
 
 ---
 
-# 11. Volume Context
+# 12. Volume Context
 
 The current XAUUSDc dataset provides meaningful tick volume but zero-valued real volume.
 
@@ -495,7 +525,7 @@ Volume should initially be treated as contextual information rather than a manda
 
 ---
 
-# 12. Research Questions
+# 13. Research Questions
 
 The first feature-analysis stage should answer empirical questions rather than optimize a trading rule.
 
@@ -553,7 +583,7 @@ Compare outcomes under different tick-volume conditions.
 
 ---
 
-# 13. Outcome Must Be Separate From Features
+# 14. Outcome Must Be Separate From Features
 
 Feature engineering must not encode the future outcome.
 
@@ -581,7 +611,7 @@ This separation is essential for avoiding look-ahead bias.
 
 ---
 
-# 14. NO TRADE
+# 15. NO TRADE
 
 The system explicitly supports:
 
@@ -605,7 +635,7 @@ rather than being forced into LONG or SHORT.
 
 ---
 
-# 15. Initial Feature Set
+# 16. Initial Feature Set
 
 The first implementation should remain compact.
 
@@ -673,7 +703,7 @@ Not all of these features are guaranteed to survive into the final model.
 
 ---
 
-# 16. Feature Selection Principle
+# 17. Feature Selection Principle
 
 A feature is retained because it provides useful information demonstrated through proper time-series validation.
 
@@ -700,7 +730,7 @@ feature retention
 
 ---
 
-# 17. Future Expansion
+# 18. Future Expansion
 
 Only after the initial feature set has been evaluated should additional concepts be considered.
 
@@ -721,7 +751,7 @@ These are research candidates, not current strategy rules.
 
 ---
 
-# 18. Design Principle
+# 19. Design Principle
 
 The project is intentionally specialized.
 

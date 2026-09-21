@@ -283,6 +283,41 @@ Nearest FVG, order block, and liquidity location features are intentionally
 not part of Location v1 yet. Their object-selection and "nearest" semantics
 must be specified explicitly before implementation.
 
+
+## 9.6 FVG Reference Layer
+
+FVG Transition analysis uses a separate immutable reference layer. This layer
+does not replace the existing latest-FVG feature context.
+
+Each valid historical FVG is represented as an `FVGReference` with:
+
+- `creation_index`
+- `direction`
+- `lower`
+- `upper`
+- `size`
+- `creation_timestamp`
+
+An FVG is created on candle `t` from candles `t-2` and `t`:
+
+- bullish FVG when `low[t] > high[t-2]`
+- bearish FVG when `high[t] < low[t-2]`
+
+The inequalities are strict. Equal boundaries do not create an FVG.
+
+An FVG reference becomes available starting on its creation candle `t`.
+No future candle may be required to construct the reference.
+
+Unlike `add_fvg_features()`, which intentionally exposes only the latest
+historical FVG context, `build_fvg_references()` preserves every valid
+historical FVG. This is required for later transition analysis between
+spatially ordered references.
+
+The reference layer contains only immutable properties of the FVG itself.
+Target selection, previous/next reference routing, target interaction,
+rejection, and transition outcomes are separate transition-layer concepts and
+are not part of `FVGReference` v1.
+
 ## 10. MTF
 
 Reserved for a later specification. MTF features must follow the same as-of-time rule.
