@@ -77,3 +77,52 @@ def test_run_backtest_skips_candidate_without_exit_area():
     )
 
     assert outcomes == []
+
+
+def test_run_backtest_trades_keeps_candidate_identity_when_some_are_skipped():
+    from market_engine.backtest import run_backtest_trades
+
+    skipped = SetupCandidate(
+        setup_index=1,
+        setup_timestamp=1,
+        direction=Direction.DOWN,
+        entry_index=2,
+        entry_timestamp=2,
+        entry_price=100.0,
+        invalidation_price=105.0,
+        risk=5.0,
+        invalidation_swing_index=0,
+    )
+    kept = SetupCandidate(
+        setup_index=2,
+        setup_timestamp=2,
+        direction=Direction.UP,
+        entry_index=3,
+        entry_timestamp=3,
+        entry_price=100.0,
+        invalidation_price=95.0,
+        risk=5.0,
+        invalidation_swing_index=0,
+    )
+    swings = [
+        ValidSwing(
+            swing_type=SwingType.HIGH,
+            index=0,
+            timestamp=0,
+            confirmation_index=1,
+            confirmation_timestamp=1,
+            price=110.0,
+        ),
+    ]
+    frame = pd.DataFrame([
+        {"high": 101.0, "low": 99.0},
+        {"high": 102.0, "low": 99.0},
+        {"high": 103.0, "low": 99.0},
+        {"high": 110.0, "low": 100.0},
+    ])
+
+    trades = run_backtest_trades([skipped, kept], swings, frame, spread_price=0.2)
+
+    assert len(trades) == 1
+    assert trades[0].candidate is kept
+    assert trades[0].outcome.status == "TARGET"
