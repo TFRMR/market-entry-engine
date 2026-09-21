@@ -25,6 +25,14 @@ ALL_BARRIER_LABELS: Final[frozenset[str]] = frozenset(
 
 STRUCTURAL_LABEL_HORIZON: Final[int] = 10
 
+PRE_SETUP_FEATURE_COLUMNS: Final[tuple[str, ...]] = (
+    "structure_direction",
+    "structure_distance_to_high",
+    "structure_distance_to_low",
+    "structure_bars_since_last_swing",
+    "structure_bars_since_last_bos",
+)
+
 
 def is_model_label(label: object) -> bool:
     """Return whether a barrier outcome is eligible as a binary model label."""
@@ -51,6 +59,7 @@ def build_setup_label_dataset(
     feature_columns: tuple[str, ...],
     horizon: int = STRUCTURAL_LABEL_HORIZON,
     events: list[StructureEvent] | None = None,
+    pre_feature_columns: tuple[str, ...] = (),
 ) -> pd.DataFrame:
     """Build setup-time features with labels from structural exit areas.
 
@@ -61,14 +70,16 @@ def build_setup_label_dataset(
     if horizon <= 0:
         raise ValueError("horizon must be greater than zero.")
 
-    if feature_columns and feature_frame is None:
-        raise ValueError("feature_frame is required when feature_columns are requested.")
+    requested_feature_columns = tuple(dict.fromkeys((*feature_columns, *pre_feature_columns)))
+
+    if requested_feature_columns and feature_frame is None:
+        raise ValueError("feature_frame is required when feature columns are requested.")
 
     if feature_frame is not None:
         if len(feature_frame) != len(frame):
             raise ValueError("feature_frame must have the same length as frame.")
 
-        missing = sorted(set(feature_columns) - set(feature_frame.columns))
+        missing = sorted(set(requested_feature_columns) - set(feature_frame.columns))
         if missing:
             raise ValueError(
                 f"feature_frame is missing required columns: {', '.join(missing)}"
@@ -125,6 +136,11 @@ def build_setup_label_dataset(
         if feature_frame is not None:
             for column in feature_columns:
                 row[column] = feature_frame.iloc[candidate.setup_index][column]
+            if pre_feature_columns:
+                if candidate.setup_index <= 0:
+                    raise ValueError("pre-setup features require a candle before the setup candle.")
+                for column in pre_feature_columns:
+                    row[f"pre_{column}"] = feature_frame.iloc[candidate.setup_index - 1][column]
 
         rows.append(row)
 
@@ -143,5 +159,6 @@ def build_setup_label_dataset(
         "label",
         *(SETUP_FACT_COLUMNS if events is not None else ()),
         *feature_columns,
+        *(f"pre_{column}" for column in pre_feature_columns),
     ]
     return pd.DataFrame(rows, columns=columns)
