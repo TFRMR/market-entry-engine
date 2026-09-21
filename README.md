@@ -199,4 +199,4 @@ The current development quality gate is:
 Ruff covers the engine and test suite. Exploratory audit scripts under
 scripts/audit_*.py are intentionally excluded from the production lint scope.
 
-Current checkpoint: realized-R audit run on the development partition; results logged in docs/EXPERIMENT_LOG.md.
+Current checkpoint: structural-context heterogeneity audit completed on the development partition; results logged in docs/EXPERIMENT_LOG.md. Next step is stability testing across time and spread before ML feature selection.
