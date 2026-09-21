@@ -20,6 +20,7 @@ from market_engine.holdout import (
     split_historical_boundary,
 )
 from market_engine.realized import build_realized_r_frame, cluster_bootstrap_mean
+from market_engine.setup_facts import SetupFactContext
 from market_engine.structure import (
     build_structural_sequence,
     process_structural_candles,
@@ -132,7 +133,9 @@ def main() -> None:
     for _, row in development.iterrows():
         setup_index = int(row["setup_index"])
         feature_index = setup_index - 1
-        context = {}
+        candidate = candidate_by_index.get(setup_index)
+        context = fact_context.facts(candidate) if candidate is not None else {}
+        context.pop("setup_bos_external", None)
         if feature_index >= 0:
             for column in pre_columns:
                 context[f"pre_{column}"] = structural_features.iloc[feature_index][column]
