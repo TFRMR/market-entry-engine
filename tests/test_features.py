@@ -8,9 +8,9 @@ from market_engine.features import (
     add_micro_structure_features,
     add_momentum_features,
     add_recent_movement_features,
-    add_volume_features,
     add_support_resistance_features,
     add_volatility_features,
+    add_volume_features,
     build_features,
 )
 
@@ -311,7 +311,7 @@ def test_support_resistance_rejects_invalid_windows() -> None:
 
 
 def test_recent_movement_features_calculate_returns() -> None:
-    frame = make_sample_frame(rows=20)
+    frame = make_sample_frame(rows=60)
 
     result = add_recent_movement_features(frame)
 
@@ -477,3 +477,41 @@ def test_build_features_contains_micro_structure_features() -> None:
 
     assert expected_columns.issubset(result.columns)
     assert len(result) == len(frame)
+
+
+
+
+
+
+
+
+
+
+def test_active_structure_features_carry_snapshot_across_inside_candles():
+    frame = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(
+                "2026-01-01",
+                periods=6,
+                freq="30min",
+            ),
+            "open": [10.0, 11.0, 13.0, 13.0, 11.0, 10.0],
+            "high": [12.0, 14.0, 14.5, 13.5, 13.0, 12.0],
+            "low": [9.0, 10.0, 11.0, 10.0, 8.0, 8.5],
+            "close": [11.0, 13.0, 14.0, 11.0, 9.0, 9.5],
+            "tick_volume": [100, 101, 102, 103, 104, 105],
+            "real_volume": [0.0] * 6,
+            "spread": [160] * 6,
+        }
+    )
+
+    result = add_active_structure_features(frame)
+
+    # Candle 5 is inside candle 4's range. The active structural
+    # high from the preceding snapshot must remain available.
+    assert pd.notna(result.loc[5, "structure_distance_to_high"])
+    assert result.loc[5, "structure_distance_to_high"] == (
+        result.loc[4, "structure_distance_to_high"]
+        + result.loc[4, "close"]
+        - result.loc[5, "close"]
+    )

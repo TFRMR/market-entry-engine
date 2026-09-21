@@ -376,11 +376,13 @@ def add_active_structure_features(frame: pd.DataFrame) -> pd.DataFrame:
     structural = build_structural_sequence(result)
     _, _, snapshots = process_structural_candles_with_context(structural)
 
-    direction = pd.Series(np.nan, index=result.index, dtype=float)
-    last_high = pd.Series(np.nan, index=result.index, dtype=float)
-    last_low = pd.Series(np.nan, index=result.index, dtype=float)
-    last_swing_index = pd.Series(np.nan, index=result.index, dtype=float)
-    last_bos_index = pd.Series(np.nan, index=result.index, dtype=float)
+    size = len(result)
+    direction = np.full(size, np.nan)
+    last_high = np.full(size, np.nan)
+    last_low = np.full(size, np.nan)
+    last_swing_index = np.full(size, np.nan)
+    last_bos_index = np.full(size, np.nan)
+    snapshot_mask = np.zeros(size, dtype=bool)
 
     direction_code = {
         None: np.nan,
@@ -390,38 +392,65 @@ def add_active_structure_features(frame: pd.DataFrame) -> pd.DataFrame:
 
     for snapshot in snapshots:
         position = snapshot.index
-        if position < 0 or position >= len(result):
+        if position < 0 or position >= size:
             raise ValueError("Structure snapshot index is outside the feature frame.")
 
-        direction.iloc[position] = direction_code[
+        snapshot_mask[position] = True
+        direction[position] = direction_code[
             snapshot.direction.value if snapshot.direction else None
         ]
         if snapshot.last_high is not None:
-            last_high.iloc[position] = snapshot.last_high.price
+            last_high[position] = snapshot.last_high.price
         if snapshot.last_low is not None:
-            last_low.iloc[position] = snapshot.last_low.price
+            last_low[position] = snapshot.last_low.price
         if snapshot.last_swing_confirmation_index is not None:
-            last_swing_index.iloc[position] = (
-                snapshot.last_swing_confirmation_index
-            )
+            last_swing_index[position] = snapshot.last_swing_confirmation_index
         if snapshot.last_bos_index is not None:
-            last_bos_index.iloc[position] = snapshot.last_bos_index
+            last_bos_index[position] = snapshot.last_bos_index
 
-    result["structure_direction"] = direction.fillna(0)
-    result["structure_distance_to_high"] = last_high - result["close"]
-    result["structure_distance_to_low"] = result["close"] - last_low
+    last_snapshot = np.maximum.accumulate(
+        np.where(snapshot_mask, np.arange(size), -1)
+    )
+
+    def carry(values: np.ndarray) -> np.ndarray:
+        valid = last_snapshot >= 0
+        output = np.full(size, np.nan)
+        positions = np.clip(last_snapshot, 0, None)
+        output[valid] = values[positions[valid]]
+        return output
+
+    direction = carry(direction)
+    last_high = carry(last_high)
+    last_low = carry(last_low)
+    last_swing_index = carry(last_swing_index)
+    last_bos_index = carry(last_bos_index)
+
+    result["structure_direction"] = pd.Series(
+        direction,
+        index=result.index,
+    ).fillna(0)
+
+    result["structure_distance_to_high"] = (
+        pd.Series(last_high, index=result.index) - result["close"]
+    )
+    result["structure_distance_to_low"] = (
+        result["close"] - pd.Series(last_low, index=result.index)
+    )
 
     current_index = pd.Series(
-        np.arange(len(result)),
+        np.arange(size),
         index=result.index,
         dtype=float,
     )
 
-    result["structure_bars_since_last_swing"] = current_index - last_swing_index
-    result["structure_bars_since_last_bos"] = current_index - last_bos_index
+    result["structure_bars_since_last_swing"] = (
+        current_index - pd.Series(last_swing_index, index=result.index)
+    )
+    result["structure_bars_since_last_bos"] = (
+        current_index - pd.Series(last_bos_index, index=result.index)
+    )
 
     return result
-
 
 def add_volume_features(
     frame: pd.DataFrame,
