@@ -107,6 +107,8 @@ class StructureCheckpoint:
     broken_low_index: int | None
     external_high: ValidSwing | None = None
     external_low: ValidSwing | None = None
+    historical_last_high: ValidSwing | None = None
+    historical_last_low: ValidSwing | None = None
 
 
 @dataclass(frozen=True)
