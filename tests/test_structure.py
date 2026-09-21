@@ -430,6 +430,7 @@ def test_simultaneous_bos_events_have_deterministic_order():
     ] == [
         ("BULLISH_BOS", 2),
         ("BEARISH_BOS", 4),
+        ("BEARISH_CHOCH", 4),
     ]
 
 
