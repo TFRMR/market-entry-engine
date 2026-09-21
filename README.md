@@ -119,7 +119,7 @@ ahead of statistical modeling and entry optimization.
   - Long entry pays spread above the quoted price.
   - Short entry pays spread below the quoted price.
   - Execution risk is recalculated from the executed entry price to invalidation.
-  - Raw MT5 <SPREAD> is not used directly; conversion to price units belongs to the data/source adapter.
+  - Raw MT5 `<SPREAD>` is not used directly; conversion to price units belongs to the data/source adapter.
 - [x] Deterministic execution baseline
   - Trade outcome is evaluated from candles after setup.
   - Execution price and risk include the modeled spread.
@@ -149,8 +149,14 @@ ahead of statistical modeling and entry optimization.
   - Uses the same structural exit-area and execution semantics as backtesting.
   - Uses a fixed forward label horizon of 10 candles.
   - Maps TARGET -> TP_FIRST, STOP -> SL_FIRST, and horizon-expired OPEN -> UNRESOLVED.
+  - Exposes reward_risk explicitly and flags same-candle stop/target ambiguity.
+  - Setups without a complete forward horizon are excluded rather than mislabeled at end-of-data.
   - Candidates without a valid structural exit area are excluded.
-- [ ] Time-series validation
+- [x] Time-series validation
+  - Chronological train / validation / test split with expanding training history.
+  - Purge gap defaults to the structural label horizon (10 candles) to prevent forward-label overlap.
+  - Explicit embargo gap is supported between validation and test.
+  - No shuffling or random split is used.
 - [ ] LightGBM baseline
 - [ ] XGBoost baseline
 - [ ] Out-of-sample evaluation
@@ -182,4 +188,4 @@ The current development quality gate is:
 Ruff covers the engine and test suite. Exploratory audit scripts under
 scripts/audit_*.py are intentionally excluded from the production lint scope.
 
-Current checkpoint: structural setup label builder added; local test gate passed (89 tests before this change).
+Current checkpoint: structural setup label builder and leakage-safe time-series split added; local test gate pending after this change.
