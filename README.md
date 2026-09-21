@@ -112,6 +112,14 @@ ahead of statistical modeling and entry optimization.
   - Exit areas use only valid swings confirmed before setup.
   - A swing is excluded if price breaches its level after confirmation and before setup.
   - Confirmation and setup candles are excluded from the breach window.
+- [x] Execution cost model
+  - Execution is separated from structural setup generation.
+  - `SetupCandidate.entry_price` remains the quoted/setup price.
+  - Execution applies `spread_price` expressed in price units.
+  - Long entry pays spread above the quoted price.
+  - Short entry pays spread below the quoted price.
+  - Execution risk is recalculated from the executed entry price to invalidation.
+  - Raw MT5 `<SPREAD>` is not used directly; conversion to price units belongs to the data/source adapter.
 - [ ] Execution cost model
 - [ ] Deterministic execution baseline
 
