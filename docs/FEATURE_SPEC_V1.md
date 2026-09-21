@@ -33,7 +33,30 @@ Scope: deterministic structure + market context features for historical inferenc
 | internal_boundary_distance_atr | numeric | Distance to relevant internal boundary |
 | external_boundary_distance_atr | numeric | Distance to relevant external boundary |
 
-## 3. FVG
+## 3. Trend / regime and range
+
+| Feature | Type | Meaning |
+|---|---|---|
+| trend_regime | categorical | BULLISH / BEARISH / NEUTRAL from deterministic structure direction |
+| trend_transition | binary | CHoCH occurred at the current candle |
+| trend_transition_direction | categorical | UP / DOWN when CHoCH occurs |
+| range_state | categorical | DEFINED when both latest confirmed structural high/low form a positive-width range |
+| range_high | numeric | Latest confirmed structural high available as of the candle |
+| range_low | numeric | Latest confirmed structural low available as of the candle |
+| range_width | numeric | Structural range high minus range low |
+| range_position | numeric | Close location within the structural range; not clipped outside 0..1 |
+| range_position_zone | categorical | LOW / MID / HIGH; UNDEFINED when no valid range exists |
+
+Rules:
+
+- Trend/regime is derived from deterministic structure direction; it does not use EMA or other indicator alignment.
+- CHoCH is the transition event. A transition does not by itself establish a completed reversal.
+- The range is a structural context range built from confirmed valid swing levels already available at the current candle.
+- No fixed price-distance, candle-count, or volatility threshold is used to define the range.
+- Range position may exceed 0..1 when price has moved outside the previously confirmed structural range; values are preserved rather than clipped because the excursion is information.
+- Undefined structural history remains missing/undefined rather than being imputed.
+
+## 4. FVG
 
 - fvg_present
 - fvg_direction
@@ -46,7 +69,7 @@ Scope: deterministic structure + market context features for historical inferenc
 
 FVG must be detected from past/current candles only and represented as a zone with explicit creation time.
 
-## 4. Order Block
+## 5. Order Block
 
 - ob_present
 - ob_direction
@@ -60,7 +83,7 @@ FVG must be detected from past/current candles only and represented as a zone wi
 
 OB is a contextual hypothesis, not a deterministic trade signal.
 
-## 5. Liquidity
+## 6. Liquidity
 
 - liquidity_level_present
 - liquidity_direction
@@ -72,7 +95,7 @@ OB is a contextual hypothesis, not a deterministic trade signal.
 
 Liquidity levels must have an explicit historical creation/observation rule.
 
-## 6. Price action / displacement
+## 7. Price action / displacement
 
 - candle_range
 - candle_body
@@ -85,7 +108,7 @@ Liquidity levels must have an explicit historical creation/observation rule.
 - lower_wick_to_body
 - close_position_in_range
 
-## 7. Volatility
+## 8. Volatility
 
 - atr
 - atr_change
@@ -93,7 +116,7 @@ Liquidity levels must have an explicit historical creation/observation rule.
 
 ATR is normalization/context, not a fixed TP/SL rule.
 
-## 8. Location
+## 9. Location
 
 - distance_to_support_atr
 - distance_to_resistance_atr
@@ -103,11 +126,11 @@ ATR is normalization/context, not a fixed TP/SL rule.
 - distance_to_nearest_ob_atr
 - distance_to_nearest_liquidity_atr
 
-## 9. MTF
+## 10. MTF
 
 Reserved for a later specification. MTF features must follow the same as-of-time rule.
 
-## 10. Forbidden leakage
+## 11. Forbidden leakage
 
 At candle t, features must not use:
 
@@ -117,7 +140,7 @@ At candle t, features must not use:
 - future target/exit information;
 - future candle highs/lows except where the feature definition itself is explicitly based on information available at t.
 
-## 11. Output contract
+## 12. Output contract
 
 The feature engine should produce:
 
@@ -127,7 +150,7 @@ The feature engine should produce:
 4. validity/as-of timestamp;
 5. enough metadata to audit why a structural feature has its current value.
 
-## 12. CHoCH semantics
+## 13. CHoCH semantics
 
 CHoCH is a deterministic structure-transition event derived from BOS semantics:
 
