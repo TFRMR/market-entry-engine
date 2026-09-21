@@ -253,6 +253,17 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
+def build_structural_features(frame: pd.DataFrame) -> pd.DataFrame:
+    """Build structure-only features for the structural blueprint.
+
+    Unlike build_features, this adds no momentum, EMA, rolling-level, or volume
+    columns. build_features remains available as the legacy baseline for
+    ablation studies.
+    """
+    result = add_structure_event_features(frame)
+    return add_active_structure_features(result)
+
+
 def add_micro_structure_features(frame: pd.DataFrame) -> pd.DataFrame:
     """Add short-term price structure and range expansion features."""
     result = frame.copy()

@@ -9,11 +9,12 @@ import pandas as pd
 
 from market_engine.data import load_mt5_csv
 from market_engine.entry import build_setup_candidates
-from market_engine.features import build_features
+from market_engine.features import build_features, build_structural_features
 from market_engine.labels import (
     STRUCTURAL_LABEL_HORIZON,
     build_setup_label_dataset,
 )
+from market_engine.setup_facts import SETUP_FACT_COLUMNS
 from market_engine.structure import (
     build_structural_sequence,
     process_structural_candles,
@@ -21,7 +22,7 @@ from market_engine.structure import (
 )
 
 
-FEATURE_COLUMNS = (
+ALL_FEATURE_COLUMNS = (
     "candle_range",
     "candle_body",
     "body_ratio",
@@ -90,6 +91,10 @@ FEATURE_COLUMNS = (
     "structure_bars_since_last_bos",
 )
 
+STRUCTURAL_FEATURE_COLUMNS = tuple(
+    column for column in ALL_FEATURE_COLUMNS if column.startswith("structure_")
+)
+
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -111,6 +116,11 @@ def _parse_args() -> argparse.Namespace:
         "--with-features",
         action="store_true",
         help="Also build the full feature frame and audit feature missingness.",
+    )
+    parser.add_argument(
+        "--legacy-features",
+        action="store_true",
+        help="With --with-features, audit the legacy momentum/EMA set as well (ablation only).",
     )
     parser.add_argument(
         "--inspect-structural-missing",
@@ -137,10 +147,18 @@ def main() -> None:
 
     candidates = build_setup_candidates(frame)
     structural = build_structural_sequence(frame)
-    swings, _ = process_structural_candles(structural)
+    swings, events = process_structural_candles(structural)
     _, _, snapshots = process_structural_candles_with_context(structural)
     snapshots_by_index = {snapshot.index: snapshot for snapshot in snapshots}
-    feature_frame = build_features(frame) if args.with_features else None
+    feature_frame = None
+    feature_columns: tuple[str, ...] = ()
+    if args.with_features:
+        if args.legacy_features:
+            feature_frame = build_features(frame)
+            feature_columns = ALL_FEATURE_COLUMNS
+        else:
+            feature_frame = build_structural_features(frame)
+            feature_columns = STRUCTURAL_FEATURE_COLUMNS
 
     labeled = build_setup_label_dataset(
         candidates=candidates,
@@ -148,8 +166,9 @@ def main() -> None:
         frame=frame,
         feature_frame=feature_frame,
         spread_price=args.spread_price,
-        feature_columns=FEATURE_COLUMNS if args.with_features else (),
+        feature_columns=feature_columns,
         horizon=args.horizon,
+        events=events,
     )
 
     candidate_indices = {candidate.setup_index for candidate in candidates}
@@ -215,9 +234,18 @@ def main() -> None:
             f"{labeled['setup_index'].duplicated().sum():,}"
         )
     print()
+    if not labeled.empty:
+        print("Setup facts (BOS event + swings confirmed before setup):")
+        for column in SETUP_FACT_COLUMNS:
+            values = labeled[column].astype(float)
+            print(
+                f"  {column:34s}: median {values.median():9.4f}  "
+                f"missing {int(values.isna().sum()):5d}"
+            )
+        print()
     if args.with_features:
         print("Features:")
-        feature_values = labeled[list(FEATURE_COLUMNS)]
+        feature_values = labeled[list(feature_columns)]
         missing_mask = feature_values.isna().any(axis=1)
         missing_features = int(missing_mask.sum())
         print(f"  Rows with missing feature values: {missing_features:,}")

@@ -10,7 +10,8 @@ from market_engine.entry import SetupCandidate
 from market_engine.execution import execute_entry
 from market_engine.exits import ExitAreaIndex, build_exit_areas
 from market_engine.outcome import TradeOutcome, evaluate_trade
-from market_engine.structure import ValidSwing
+from market_engine.setup_facts import SETUP_FACT_COLUMNS, SetupFactContext
+from market_engine.structure import StructureEvent, ValidSwing
 
 TP_FIRST: Final[str] = "TP_FIRST"
 SL_FIRST: Final[str] = "SL_FIRST"
@@ -49,6 +50,7 @@ def build_setup_label_dataset(
     spread_price: float,
     feature_columns: tuple[str, ...],
     horizon: int = STRUCTURAL_LABEL_HORIZON,
+    events: list[StructureEvent] | None = None,
 ) -> pd.DataFrame:
     """Build setup-time features with labels from structural exit areas.
 
@@ -74,6 +76,9 @@ def build_setup_label_dataset(
 
     rows: list[dict[str, object]] = []
     exit_index = ExitAreaIndex.build(frame)
+    fact_context = (
+        SetupFactContext.build(swings, events) if events is not None else None
+    )
 
     for candidate in candidates:
         if candidate.setup_index + horizon >= len(frame):
@@ -114,6 +119,9 @@ def build_setup_label_dataset(
             "label": label_from_trade_outcome(outcome),
         }
 
+        if fact_context is not None:
+            row.update(fact_context.facts(candidate))
+
         if feature_frame is not None:
             for column in feature_columns:
                 row[column] = feature_frame.iloc[candidate.setup_index][column]
@@ -133,6 +141,7 @@ def build_setup_label_dataset(
         "reward_risk",
         "ambiguous_barrier",
         "label",
+        *(SETUP_FACT_COLUMNS if events is not None else ()),
         *feature_columns,
     ]
     return pd.DataFrame(rows, columns=columns)
