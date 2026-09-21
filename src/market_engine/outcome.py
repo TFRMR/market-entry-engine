@@ -20,6 +20,7 @@ class TradeOutcome:
     pnl: float | None
     risk_multiple: float | None
     target_price: float | None
+    both_hit: bool = False
 
 
 def evaluate_trade(
@@ -67,6 +68,7 @@ def evaluate_trade(
                 pnl=float(pnl),
                 risk_multiple=float(pnl / execution.risk),
                 target_price=float(target.price),
+                both_hit=bool(hit_target),
             )
 
         if hit_target:
