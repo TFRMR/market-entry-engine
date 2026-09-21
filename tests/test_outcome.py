@@ -79,6 +79,7 @@ def test_stop_wins_when_stop_and_target_are_hit_same_candle():
     assert outcome.status == "STOP"
     assert outcome.exit_index == 1
     assert outcome.risk_multiple == pytest.approx(-1.0)
+    assert outcome.both_hit is True
 
 
 def test_trade_remains_open_when_neither_level_is_hit():
