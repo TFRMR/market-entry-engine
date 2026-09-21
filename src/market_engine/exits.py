@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import pandas as pd
+
 from market_engine.entry import SetupCandidate
 from market_engine.structure import (
     Direction,
-    StructureEvent,
     SwingType,
     ValidSwing,
 )
@@ -25,7 +26,7 @@ class ExitArea:
 def build_exit_areas(
     candidate: SetupCandidate,
     swings: list[ValidSwing],
-    events: list[StructureEvent] | None = None,
+    frame: pd.DataFrame,
 ) -> list[ExitArea]:
     """Return confirmed, unbroken structural levels beyond the entry price."""
     candidates: list[ExitArea] = []
@@ -34,13 +35,16 @@ def build_exit_areas(
         if swing.confirmation_index >= candidate.setup_index:
             continue
 
-        if events and any(
-            event.event.endswith("_BOS")
-            and event.swing_index == swing.index
-            and event.index <= candidate.setup_index
-            for event in events
-        ):
-            continue
+        candles_after_confirmation = frame.iloc[
+            swing.confirmation_index + 1 : candidate.setup_index
+        ]
+
+        if swing.swing_type is SwingType.HIGH:
+            if (candles_after_confirmation["high"] > swing.price).any():
+                continue
+        else:
+            if (candles_after_confirmation["low"] < swing.price).any():
+                continue
 
         if candidate.direction is Direction.UP:
             if swing.swing_type is not SwingType.HIGH:

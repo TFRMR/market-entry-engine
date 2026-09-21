@@ -109,7 +109,9 @@ ahead of statistical modeling and entry optimization.
 - [x] Setup definition
 - [x] Setup / entry / invalidation semantics
 - [x] Target / exit-area model
-- [ ] Execution cost model
+  - Exit areas use only valid swings confirmed before setup.
+  - A swing is excluded if price breaches its level after confirmation and before setup.
+  - Confirmation and setup candles are excluded from the breach window.
 - [ ] Execution cost model
 - [ ] Deterministic execution baseline
 
