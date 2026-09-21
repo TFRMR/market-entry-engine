@@ -10,8 +10,8 @@ def make_context_frame() -> pd.DataFrame:
         {
             "close": [105.0, 110.0, 115.0, 125.0],
             "structure_direction": [0.0, 1.0, 1.0, -1.0],
-            "structure_last_valid_high": [np.nan, 120.0, 120.0, 120.0],
-            "structure_last_valid_low": [np.nan, 100.0, 100.0, 100.0],
+            "structure_last_valid_high": [105.0, 120.0, 120.0, 120.0],
+            "structure_last_valid_low": [95.0, 100.0, 100.0, 100.0],
             "structure_bullish_choch": [0, 0, 0, 1],
             "structure_bearish_choch": [0, 0, 0, 0],
         }
