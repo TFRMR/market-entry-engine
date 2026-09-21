@@ -56,7 +56,7 @@ Rules:
 - Range position may exceed 0..1 when price has moved outside the previously confirmed structural range; values are preserved rather than clipped because the excursion is information.
 - Undefined structural history remains missing/undefined rather than being imputed.
 
-## 4. FVG
+## 5. FVG
 
 - fvg_present
 - fvg_direction
@@ -69,7 +69,7 @@ Rules:
 
 FVG must be detected from past/current candles only and represented as a zone with explicit creation time.
 
-## 5. Order Block
+## 6. Order Block
 
 - ob_present
 - ob_direction
@@ -83,17 +83,32 @@ FVG must be detected from past/current candles only and represented as a zone wi
 
 OB is a contextual hypothesis, not a deterministic trade signal.
 
-## 6. Liquidity
+## 4. Liquidity
 
-- liquidity_level_present
-- liquidity_direction
-- distance_to_liquidity
-- distance_to_liquidity_atr
-- liquidity_sweep
-- sweep_direction
-- sweep_size_atr
+| Feature | Type | Meaning |
+|---|---|---|
+| liquidity_high | numeric | Latest confirmed structural high available before the current candle |
+| liquidity_low | numeric | Latest confirmed structural low available before the current candle |
+| liquidity_high_present | binary | Whether a confirmed high is available before the current candle |
+| liquidity_low_present | binary | Whether a confirmed low is available before the current candle |
+| distance_to_liquidity_high | numeric | High liquidity level minus current close |
+| distance_to_liquidity_low | numeric | Current close minus low liquidity level |
+| liquidity_high_sweep | binary | Current high breaches the prior confirmed high and current close reclaims at or below it |
+| liquidity_low_sweep | binary | Current low breaches the prior confirmed low and current close reclaims at or above it |
+| liquidity_sweep | binary | Either liquidity sweep occurred on the current candle |
+| liquidity_sweep_direction | categorical | BEARISH for high sweep, BULLISH for low sweep, BOTH when both occur, otherwise NONE |
+| liquidity_sweep_size | numeric | Price distance beyond the swept liquidity level |
 
-Liquidity levels must have an explicit historical creation/observation rule.
+Rules:
+
+- Liquidity is derived from confirmed structural swing highs/lows; rolling highs/lows are not used as liquidity substitutes.
+- The liquidity level for candle t comes from the latest confirmed structural level available before candle t.
+- A high sweep requires `high > liquidity_high` and `close <= liquidity_high`.
+- A low sweep requires `low < liquidity_low` and `close >= liquidity_low`.
+- A clean close through a liquidity level is not classified as a sweep; structural BOS remains the authoritative break event.
+- No equal-high/equal-low tolerance is introduced in this first deterministic layer. Equal-level liquidity pools can be added later only with an explicit, data-safe definition.
+- Sweep direction describes the rejection implied by the reclaim: high sweep is BEARISH, low sweep is BULLISH.
+
 
 ## 7. Price action / displacement
 
