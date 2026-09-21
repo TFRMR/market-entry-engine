@@ -28,6 +28,8 @@ Scope: deterministic structure + market context features for historical inferenc
 | distance_to_last_swing_atr | numeric | Current price distance to last valid swing |
 | bos_event | categorical/binary | Whether a valid-swing break occurred at this candle |
 | bos_direction | categorical | UP / DOWN when BOS occurs |
+| choch_event | categorical/binary | Whether a valid-swing break changes the canonical structure direction at this candle |
+| choch_direction | categorical | UP / DOWN when CHoCH occurs |
 | internal_boundary_distance_atr | numeric | Distance to relevant internal boundary |
 | external_boundary_distance_atr | numeric | Distance to relevant external boundary |
 
@@ -124,3 +126,15 @@ The feature engine should produce:
 3. source/event timestamp for structural objects where relevant;
 4. validity/as-of timestamp;
 5. enough metadata to audit why a structural feature has its current value.
+
+## 12. CHoCH semantics
+
+CHoCH is a deterministic structure-transition event derived from BOS semantics:
+
+- BULLISH_CHOCH occurs when a bullish BOS breaks a previously confirmed valid swing while the canonical structure direction immediately before the candle is DOWN.
+- BEARISH_CHOCH occurs when a bearish BOS breaks a previously confirmed valid swing while the canonical structure direction immediately before the candle is UP.
+- The initial BOS is not CHoCH because there is no prior canonical direction.
+- CHoCH is an event/fact, not an entry signal by itself.
+- A CHoCH does not by itself prove a completed reversal; subsequent structure events remain authoritative.
+- If one candle produces both directional BOS events, CHoCH classification uses the pre-candle canonical direction and preserves deterministic event ordering.
+- CHoCH must use the same confirmation-time and no-look-ahead rules as BOS.
