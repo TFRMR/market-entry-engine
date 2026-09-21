@@ -102,6 +102,11 @@ def _parse_args() -> argparse.Namespace:
         type=int,
         default=STRUCTURAL_LABEL_HORIZON,
     )
+    parser.add_argument(
+        "--with-features",
+        action="store_true",
+        help="Also build the full feature frame and audit feature missingness.",
+    )
     return parser.parse_args()
 
 
@@ -117,7 +122,7 @@ def main() -> None:
     candidates = build_setup_candidates(frame)
     structural = build_structural_sequence(frame)
     swings, _ = process_structural_candles(structural)
-    feature_frame = build_features(frame)
+    feature_frame = build_features(frame) if args.with_features else None
 
     labeled = build_setup_label_dataset(
         candidates=candidates,
@@ -125,7 +130,7 @@ def main() -> None:
         frame=frame,
         feature_frame=feature_frame,
         spread_price=args.spread_price,
-        feature_columns=FEATURE_COLUMNS,
+        feature_columns=FEATURE_COLUMNS if args.with_features else (),
         horizon=args.horizon,
     )
 
@@ -197,10 +202,17 @@ def main() -> None:
             f"{labeled['setup_index'].duplicated().sum():,}"
         )
     print()
-    print("Features:")
-    missing_features = int(labeled[list(FEATURE_COLUMNS)].isna().any(axis=1).sum())
-    print(f"  Rows with missing feature values: {missing_features:,}")
-    print()
+    if args.with_features:
+        print("Features:")
+        missing_features = int(
+            labeled[list(FEATURE_COLUMNS)].isna().any(axis=1).sum()
+        )
+        print(f"  Rows with missing feature values: {missing_features:,}")
+        print()
+    else:
+        print("Features:")
+        print("  Skipped (use --with-features for the full feature audit).")
+        print()
     print("=== Audit complete ===")
 
 
