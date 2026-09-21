@@ -71,6 +71,9 @@ def build_setup_label_dataset(
     rows: list[dict[str, object]] = []
 
     for candidate in candidates:
+        if candidate.setup_index + horizon >= len(frame):
+            continue
+
         exit_areas = build_exit_areas(candidate, swings, frame)
         if not exit_areas:
             continue
@@ -99,6 +102,8 @@ def build_setup_label_dataset(
             "invalidation_price": execution.invalidation_price,
             "risk": execution.risk,
             "target_price": exit_areas[0].price,
+            "reward_risk": abs(float(exit_areas[0].price) - execution.entry_price) / execution.risk,
+            "ambiguous_barrier": outcome.both_hit,
             "label": label_from_trade_outcome(outcome),
         }
 
@@ -117,6 +122,8 @@ def build_setup_label_dataset(
         "invalidation_price",
         "risk",
         "target_price",
+        "reward_risk",
+        "ambiguous_barrier",
         "label",
         *feature_columns,
     ]
