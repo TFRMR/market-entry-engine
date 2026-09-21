@@ -380,6 +380,8 @@ def add_active_structure_features(frame: pd.DataFrame) -> pd.DataFrame:
     direction = np.full(size, np.nan)
     last_high = np.full(size, np.nan)
     last_low = np.full(size, np.nan)
+    historical_last_high = np.full(size, np.nan)
+    historical_last_low = np.full(size, np.nan)
     last_swing_index = np.full(size, np.nan)
     last_bos_index = np.full(size, np.nan)
     snapshot_mask = np.zeros(size, dtype=bool)
@@ -403,6 +405,10 @@ def add_active_structure_features(frame: pd.DataFrame) -> pd.DataFrame:
             last_high[position] = snapshot.last_high.price
         if snapshot.last_low is not None:
             last_low[position] = snapshot.last_low.price
+        if snapshot.historical_last_high is not None:
+            historical_last_high[position] = snapshot.historical_last_high.price
+        if snapshot.historical_last_low is not None:
+            historical_last_low[position] = snapshot.historical_last_low.price
         if snapshot.last_swing_confirmation_index is not None:
             last_swing_index[position] = snapshot.last_swing_confirmation_index
         if snapshot.last_bos_index is not None:
@@ -422,6 +428,8 @@ def add_active_structure_features(frame: pd.DataFrame) -> pd.DataFrame:
     direction = carry(direction)
     last_high = carry(last_high)
     last_low = carry(last_low)
+    historical_last_high = carry(historical_last_high)
+    historical_last_low = carry(historical_last_low)
     last_swing_index = carry(last_swing_index)
     last_bos_index = carry(last_bos_index)
 
@@ -435,6 +443,12 @@ def add_active_structure_features(frame: pd.DataFrame) -> pd.DataFrame:
     )
     result["structure_distance_to_low"] = (
         result["close"] - pd.Series(last_low, index=result.index)
+    )
+    result["structure_historical_distance_to_high"] = (
+        pd.Series(historical_last_high, index=result.index) - result["close"]
+    )
+    result["structure_historical_distance_to_low"] = (
+        result["close"] - pd.Series(historical_last_low, index=result.index)
     )
 
     current_index = pd.Series(
