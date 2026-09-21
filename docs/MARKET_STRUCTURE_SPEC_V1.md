@@ -352,6 +352,50 @@ BEARISH_BOS
 
 This ordering is an implementation contract and is independent of candle bullish/bearish body color.
 
+## 14. CHoCH — Change of Character
+
+CHoCH is a deterministic structure-transition event derived from a BOS against the canonical direction that existed immediately before the current candle was processed.
+
+### Bullish CHoCH
+
+A bullish BOS is a `BULLISH_CHOCH` when the canonical structure direction immediately before the candle is DOWN.
+
+### Bearish CHoCH
+
+A bearish BOS is a `BEARISH_CHOCH` when the canonical structure direction immediately before the candle is UP.
+
+Rules:
+
+- CHoCH uses the canonical direction captured at the start of the candle's structural processing.
+- A direction change caused by BOS on the current candle must not change how that same candle's CHoCH is classified.
+- The initial BOS used to establish structure is not CHoCH because there is no prior canonical direction to transition from.
+- CHoCH is an event/fact describing a potential structure transition; it is not an entry signal.
+- CHoCH alone does not prove that a reversal will continue. Subsequent valid swings and BOS events determine whether the new direction is structurally established.
+- CHoCH follows the same no-look-ahead rules as BOS: only valid swings confirmed before the current candle may be BOS targets.
+- On a two-sided break, BOS event ordering remains `BULLISH_BOS` then `BEARISH_BOS`; CHoCH classification uses the same pre-candle canonical direction and does not depend on the direction mutation caused by the first BOS event.
+
+Conceptually:
+
+    DOWN structure
+         ↓
+    bullish BOS against prior direction
+         ↓
+    BULLISH_CHOCH
+         ↓
+    subsequent confirmation required
+
+and:
+
+    UP structure
+         ↓
+    bearish BOS against prior direction
+         ↓
+    BEARISH_CHOCH
+         ↓
+    subsequent confirmation required
+
+CHoCH therefore belongs to the core structure event vocabulary while remaining distinct from a reversal/trade decision.
+
 ## 14. Explicit unresolved items
 
 The following remain before Market Structure v1 is considered complete:
