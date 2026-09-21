@@ -8,7 +8,7 @@ import pandas as pd
 
 from market_engine.entry import SetupCandidate
 from market_engine.execution import execute_entry
-from market_engine.exits import build_exit_areas
+from market_engine.exits import ExitAreaIndex, build_exit_areas
 from market_engine.outcome import TradeOutcome, evaluate_trade
 from market_engine.structure import ValidSwing
 
@@ -73,12 +73,13 @@ def build_setup_label_dataset(
             )
 
     rows: list[dict[str, object]] = []
+    exit_index = ExitAreaIndex.build(frame)
 
     for candidate in candidates:
         if candidate.setup_index + horizon >= len(frame):
             continue
 
-        exit_areas = build_exit_areas(candidate, swings, frame)
+        exit_areas = build_exit_areas(candidate, swings, frame, exit_index)
         if not exit_areas:
             continue
 
