@@ -546,6 +546,8 @@ def _process_structural_candles(
                 broken_low_index=broken_low_index,
                 external_high=external_high,
                 external_low=external_low,
+                historical_last_high=historical_last_high,
+                historical_last_low=historical_last_low,
             )
             if collect_snapshots:
                 return swings, events, checkpoint_out, snapshots
