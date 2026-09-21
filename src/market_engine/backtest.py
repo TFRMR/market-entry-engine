@@ -8,7 +8,7 @@ import pandas as pd
 
 from market_engine.entry import SetupCandidate
 from market_engine.execution import execute_entry
-from market_engine.exits import build_exit_areas
+from market_engine.exits import ExitAreaIndex, build_exit_areas
 from market_engine.outcome import TradeOutcome, evaluate_trade
 from market_engine.structure import ValidSwing
 
@@ -27,9 +27,10 @@ def run_backtest_trades(
 ) -> list[BacktestTrade]:
     """Evaluate candidates and keep each outcome tied to its candidate."""
     trades: list[BacktestTrade] = []
+    exit_index = ExitAreaIndex.build(frame)
 
     for candidate in candidates:
-        exit_areas = build_exit_areas(candidate, swings, frame)
+        exit_areas = build_exit_areas(candidate, swings, frame, exit_index)
         if not exit_areas:
             continue
 
