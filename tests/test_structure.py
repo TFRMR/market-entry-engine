@@ -13,6 +13,7 @@ from market_engine.structure import (
     find_first_bos,
     process_from_first_bos,
     process_structural_candles,
+    process_structural_candles_with_context,
 )
 
 
@@ -619,3 +620,29 @@ def test_external_boundary_break_rebuilds_from_new_boundary():
         if event.event.endswith("_BOS") and event.index > 10
     ]
     assert later_bos == []
+
+
+def test_structure_snapshot_keeps_historical_swings_after_external_rebuild():
+    candles = [
+        StructuralCandle(0, "00:00", 12, 9, 10, 11, CandleKind.UP),
+        StructuralCandle(1, "00:30", 14, 10, 11, 13, CandleKind.UP),
+        StructuralCandle(2, "01:00", 14.5, 11, 13, 14, CandleKind.UP),
+        StructuralCandle(3, "01:30", 13.5, 10, 13, 11, CandleKind.DOWN),
+        StructuralCandle(4, "02:00", 13, 8, 11, 9, CandleKind.DOWN),
+        StructuralCandle(5, "02:30", 12, 9, 9, 11, CandleKind.UP),
+        StructuralCandle(6, "03:00", 13, 10, 11, 12, CandleKind.UP),
+        StructuralCandle(7, "03:30", 13.5, 11, 12, 13, CandleKind.UP),
+        StructuralCandle(8, "04:00", 13.2, 13, 13, 13.1, CandleKind.DOWN),
+        StructuralCandle(9, "04:30", 12.5, 12, 13, 12.2, CandleKind.DOWN),
+        StructuralCandle(10, "05:00", 15, 12, 12, 14.5, CandleKind.UP),
+    ]
+    _, events, snapshots = process_structural_candles_with_context(candles)
+    bos = next(event for event in events if event.event == "BULLISH_BOS" and event.index == 10)
+    snapshot = next(snapshot for snapshot in snapshots if snapshot.index == 10)
+    assert bos.swing_index == 2
+    assert snapshot.last_high is None
+    assert snapshot.last_low is None
+    assert snapshot.historical_last_high is not None
+    assert snapshot.historical_last_high.index == 7
+    assert snapshot.historical_last_low is not None
+    assert snapshot.historical_last_low.index == 4
