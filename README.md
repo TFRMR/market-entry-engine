@@ -70,9 +70,9 @@ Completed and locked:
 
 Current next step:
 
-- implement target / exit-area semantics
-- implement execution-cost model
-- keep execution costs explicit and separate from structural facts
+- implement time-series validation
+- establish leakage-safe train / validation / test splits
+- keep validation chronology explicit
 
 The project deliberately keeps deterministic structure and feature contracts
 ahead of statistical modeling and entry optimization.
@@ -139,7 +139,12 @@ ahead of statistical modeling and entry optimization.
 
 ### Statistical / ML evaluation
 
-- [ ] Label generation
+- [x] Label generation
+  - Barrier labels are deterministic and generated only from candles after the setup candle.
+  - `TP_FIRST` and `SL_FIRST` are the only binary modeling labels.
+  - `BOTH_SAME_CANDLE` is explicitly retained but excluded from binary modeling.
+  - `UNRESOLVED` is retained for setups whose horizon expires without a barrier hit.
+  - Canonical label definitions live in `market_engine.labels`.
 - [ ] Time-series validation
 - [ ] LightGBM baseline
 - [ ] XGBoost baseline
@@ -172,4 +177,4 @@ The current development quality gate is:
 Ruff covers the engine and test suite. Exploratory audit scripts under
 `scripts/audit_*.py` are intentionally excluded from the production lint scope.
 
-Current checkpoint: **aggregation implementation added; local test gate still needs to be run.**
+Current checkpoint: **label contract added; local test gate pending.**
