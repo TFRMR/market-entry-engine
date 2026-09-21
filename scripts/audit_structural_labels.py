@@ -10,7 +10,11 @@ import pandas as pd
 from market_engine.data import load_mt5_csv
 from market_engine.entry import build_setup_candidates
 from market_engine.features import build_features, build_structural_features
-from market_engine.holdout import HISTORICAL_AUDIT_CUTOFF, split_historical_boundary
+from market_engine.holdout import (
+    HISTORICAL_AUDIT_CUTOFF,
+    historical_boundary_index,
+    split_historical_boundary,
+)
 from market_engine.labels import (
     PRE_SETUP_FEATURE_COLUMNS,
     STRUCTURAL_LABEL_HORIZON,
@@ -179,24 +183,43 @@ def main() -> None:
         pre_feature_columns=PRE_SETUP_FEATURE_COLUMNS if args.with_features else (),
     )
 
-    candidate_indices = {candidate.setup_index for candidate in candidates}
-    incomplete = {
-        candidate.setup_index
-        for candidate in candidates
-        if candidate.setup_index + args.horizon >= len(frame)
-    }
-    eligible_indices = candidate_indices - incomplete
-    labeled_indices = set(labeled["setup_index"].astype(int))
-    no_exit_area = eligible_indices - labeled_indices
-    excluded_other = candidate_indices - incomplete - no_exit_area - labeled_indices
-
     development, historical_audit, purged_boundary = split_historical_boundary(
         labeled, frame, args.horizon, HISTORICAL_AUDIT_CUTOFF
     )
-    if not args.include_historical_audit:
+    if args.include_historical_audit:
+        labeled = pd.concat([development, historical_audit], ignore_index=True)
+    else:
         labeled = development
 
-    print("=== Structural Setup Label Audit ===")
+    boundary_index = historical_boundary_index(frame, HISTORICAL_AUDIT_CUTOFF)
+    if args.include_historical_audit:
+        selected_candidates = [
+            candidate
+            for candidate in candidates
+            if candidate.setup_index + args.horizon < len(frame)
+            and (
+                candidate.setup_index + args.horizon < boundary_index
+                or candidate.setup_index >= boundary_index
+            )
+        ]
+    else:
+        selected_candidates = [
+            candidate
+            for candidate in candidates
+            if candidate.setup_index + args.horizon < boundary_index
+        ]
+
+    candidate_indices = {candidate.setup_index for candidate in selected_candidates}
+    incomplete = {
+        candidate.setup_index
+        for candidate in selected_candidates
+        if candidate.setup_index + args.horizon >= len(frame)
+    }
+    labeled_indices = set(labeled["setup_index"].astype(int))
+    no_exit_area = candidate_indices - incomplete - labeled_indices
+    excluded_other = candidate_indices - incomplete - no_exit_area - labeled_indices
+
+    print("=== Structural Setup Label Audit ===
     print()
     print("Chronological boundary policy:")
     print(f"  Historical audit boundary: {HISTORICAL_AUDIT_CUTOFF}")
