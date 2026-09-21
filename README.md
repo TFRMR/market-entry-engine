@@ -114,18 +114,18 @@ ahead of statistical modeling and entry optimization.
   - Confirmation and setup candles are excluded from the breach window.
 - [x] Execution cost model
   - Execution is separated from structural setup generation.
-  - `SetupCandidate.entry_price` remains the quoted/setup price.
-  - Execution applies `spread_price` expressed in price units.
+  - SetupCandidate.entry_price remains the quoted/setup price.
+  - Execution applies spread_price expressed in price units.
   - Long entry pays spread above the quoted price.
   - Short entry pays spread below the quoted price.
   - Execution risk is recalculated from the executed entry price to invalidation.
-  - Raw MT5 `<SPREAD>` is not used directly; conversion to price units belongs to the data/source adapter.
+  - Raw MT5 <SPREAD> is not used directly; conversion to price units belongs to the data/source adapter.
 - [x] Deterministic execution baseline
   - Trade outcome is evaluated from candles after setup.
   - Execution price and risk include the modeled spread.
   - Target and invalidation are evaluated as deterministic price barriers.
   - If stop and target are both touched in one candle, stop is resolved first.
-  - Outcomes are `TARGET`, `STOP`, or `OPEN`.
+  - Outcomes are TARGET, STOP, or OPEN.
   - PnL and R-multiple use the executed entry price.
 - [x] Deterministic backtest orchestration
   - Setup candidates are evaluated through execution and exit-area selection.
@@ -133,18 +133,23 @@ ahead of statistical modeling and entry optimization.
   - Candidates without a valid exit area are skipped.
   - Portfolio sizing and additional transaction costs remain outside this baseline.
 - [x] Backtest result aggregation
-  - Summarizes total trades and counts for `TARGET`, `STOP`, and `OPEN`.
+  - Summarizes total trades and counts for TARGET, STOP, and OPEN.
   - Sums PnL and R-multiple for closed outcomes.
   - Does not assume position sizing, portfolio allocation, or additional costs.
 
 ### Statistical / ML evaluation
 
-- [x] Label generation
-  - Barrier labels are deterministic and generated only from candles after the setup candle.
-  - `TP_FIRST` and `SL_FIRST` are the only binary modeling labels.
-  - `BOTH_SAME_CANDLE` is explicitly retained but excluded from binary modeling.
-  - `UNRESOLVED` is retained for setups whose horizon expires without a barrier hit.
-  - Canonical label definitions live in `market_engine.labels`.
+- [x] Label contract
+  - Canonical labels are TP_FIRST, SL_FIRST, BOTH_SAME_CANDLE, and UNRESOLVED.
+  - TP_FIRST and SL_FIRST are the only binary modeling labels.
+  - BOTH_SAME_CANDLE is retained for the generic barrier-outcome vocabulary.
+  - Structural setup labeling uses the nearest valid structural exit area, not fixed R-multiple targets.
+- [x] Structural setup dataset builder
+  - Builds one row per setup candidate with features read from the setup candle.
+  - Uses the same structural exit-area and execution semantics as backtesting.
+  - Uses a fixed forward label horizon of 10 candles.
+  - Maps TARGET -> TP_FIRST, STOP -> SL_FIRST, and horizon-expired OPEN -> UNRESOLVED.
+  - Candidates without a valid structural exit area are excluded.
 - [ ] Time-series validation
 - [ ] LightGBM baseline
 - [ ] XGBoost baseline
@@ -171,10 +176,10 @@ the same post-anchor events and confirmed swings as the uninterrupted full run.
 
 The current development quality gate is:
 
-- `ruff check .`
-- `pytest -q`
+- ruff check .
+- pytest -q
 
 Ruff covers the engine and test suite. Exploratory audit scripts under
-`scripts/audit_*.py` are intentionally excluded from the production lint scope.
+scripts/audit_*.py are intentionally excluded from the production lint scope.
 
-Current checkpoint: **label contract added; local test gate pending.**
+Current checkpoint: structural setup label builder added; local test gate passed (89 tests before this change).
