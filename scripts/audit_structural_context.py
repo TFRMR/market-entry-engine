@@ -20,7 +20,6 @@ from market_engine.holdout import (
     split_historical_boundary,
 )
 from market_engine.realized import build_realized_r_frame, cluster_bootstrap_mean
-from market_engine.setup_facts import SetupFactContext
 from market_engine.structure import (
     build_structural_sequence,
     process_structural_candles,
@@ -126,19 +125,19 @@ def main() -> None:
     candidate_by_index = {candidate.setup_index: candidate for candidate in candidates}
 
     rows: list[dict[str, object]] = []
+    pre_columns = (
+        "structure_direction",
+        "structure_distance_to_high",
+        "structure_distance_to_low",
+        "structure_bars_since_last_swing",
+        "structure_bars_since_last_bos",
+    )
     for _, row in development.iterrows():
         setup_index = int(row["setup_index"])
-        candidate = candidate_by_index[setup_index]
-        context = fact_context.facts(candidate)
         feature_index = setup_index - 1
+        context = {}
         if feature_index >= 0:
-            for column in (
-                "structure_direction",
-                "structure_distance_to_high",
-                "structure_distance_to_low",
-                "structure_bars_since_last_swing",
-                "structure_bars_since_last_bos",
-            ):
+            for column in pre_columns:
                 context[f"pre_{column}"] = structural_features.iloc[feature_index][column]
         rows.append(context)
 
