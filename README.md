@@ -73,10 +73,10 @@ Completed and locked:
 
 Current next step:
 
-- run the predefined structural-context stability audit across chronological development slices
-- repeat the same locked context analysis at spreads 0.00 / 0.16 / 0.30 / 0.50
-- require persistent context direction across time and execution cost before ML feature selection
-- do not tune thresholds or select a best bucket from this audit
+- stability audit complete: persistent context contrasts are carried forward as candidates, not thresholds
+- lock deterministic Context v1 semantics, starting with CHoCH as a structure-transition event
+- enrich context in small deterministic layers: trend/regime, range, liquidity, FVG, order block, S/R, location, displacement, pullback state, and event sequence
+- audit each layer for as-of correctness before ML feature selection
 
 The project deliberately keeps deterministic structure and feature contracts
 ahead of statistical modeling and entry optimization.
@@ -101,6 +101,7 @@ ahead of statistical modeling and entry optimization.
 - [x] Valid swing confirmation
 - [x] HH / HL / LH / LL
 - [x] BOS from confirmed valid swings
+- [x] CHoCH transition event semantics
 - [x] First BOS warm-up / structural anchor
 - [x] StructureCheckpoint / forward continuation
 - [x] Internal / external structure
@@ -111,7 +112,7 @@ ahead of statistical modeling and entry optimization.
 
 ### Context and entry engine
 
-- [x] Market context features
+- [x] Market context feature contract
 - [x] Setup definition
 - [x] Setup / entry / invalidation semantics
 - [x] Target / exit-area model
@@ -200,4 +201,4 @@ The current development quality gate is:
 Ruff covers the engine and test suite. Exploratory audit scripts under
 scripts/audit_*.py are intentionally excluded from the production lint scope.
 
-Current checkpoint: structural-context heterogeneity audit completed on the development partition; results logged in docs/EXPERIMENT_LOG.md. Next step is stability testing across time and spread before ML feature selection.
+Current checkpoint: structural-context stability audit completed on the development partition; results are logged in docs/EXPERIMENT_LOG.md. Next step is deterministic Context v1 enrichment, beginning with CHoCH.
