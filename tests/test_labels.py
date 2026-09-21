@@ -111,6 +111,8 @@ def test_setup_label_uses_structural_target_and_setup_features() -> None:
     assert result.loc[0, "target_price"] == 110.0
     assert result.loc[0, "setup_feature"] == 20
     assert result.loc[0, "entry_index"] == 2
+    assert result.loc[0, "reward_risk"] == pytest.approx(2.0)
+    assert result.loc[0, "ambiguous_barrier"] is False
 
 
 def test_setup_label_maps_horizon_expiry_to_unresolved() -> None:
@@ -169,3 +171,21 @@ def test_setup_label_requires_positive_horizon() -> None:
             feature_columns=("setup_feature",),
             horizon=0,
         )
+
+
+def test_setup_label_skips_incomplete_forward_horizon() -> None:
+    frame = make_frame().iloc[:3].copy()
+    features = frame.copy()
+    features["setup_feature"] = [10, 20, 30]
+
+    result = build_setup_label_dataset(
+        candidates=[make_candidate()],
+        swings=make_swings(),
+        frame=frame,
+        feature_frame=features,
+        spread_price=0.0,
+        feature_columns=("setup_feature",),
+        horizon=2,
+    )
+
+    assert result.empty
