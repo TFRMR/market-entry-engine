@@ -127,6 +127,11 @@ ahead of statistical modeling and entry optimization.
   - If stop and target are both touched in one candle, stop is resolved first.
   - Outcomes are `TARGET`, `STOP`, or `OPEN`.
   - PnL and R-multiple use the executed entry price.
+- [x] Deterministic backtest orchestration
+  - Setup candidates are evaluated through execution and exit-area selection.
+  - The nearest valid exit area is used as the deterministic target.
+  - Candidates without a valid exit area are skipped.
+  - Portfolio sizing and additional transaction costs remain outside this baseline.
 
 ### Statistical / ML evaluation
 
