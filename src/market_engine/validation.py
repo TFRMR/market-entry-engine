@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from market_engine.labels import STRUCTURAL_LABEL_HORIZON
+
 @dataclass(frozen=True)
 class TimeSeriesFold:
     train_start: int
