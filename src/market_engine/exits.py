@@ -33,7 +33,7 @@ class ExitAreaIndex:
     low_table: tuple[np.ndarray, ...]
 
     @classmethod
-    def build(cls, frame: pd.DataFrame) -> "ExitAreaIndex":
+    def build(cls, frame: pd.DataFrame) -> ExitAreaIndex:
         """Build O(n log n) range-max/min tables for the frame."""
         highs = frame["high"].to_numpy(dtype=float)
         lows = frame["low"].to_numpy(dtype=float)
