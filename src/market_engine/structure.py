@@ -115,6 +115,8 @@ class StructureSnapshot:
     direction: Direction | None
     last_high: ValidSwing | None
     last_low: ValidSwing | None
+    historical_last_high: ValidSwing | None
+    historical_last_low: ValidSwing | None
     last_swing_confirmation_index: int | None
     last_bos_index: int | None
 
@@ -202,6 +204,8 @@ def _process_structural_candles(
     broken_low_index: int | None = None
     external_high: ValidSwing | None = None
     external_low: ValidSwing | None = None
+    historical_last_high: ValidSwing | None = None
+    historical_last_low: ValidSwing | None = None
     last_swing_confirmation_index: int | None = None
     last_bos_index: int | None = None
 
@@ -219,6 +223,8 @@ def _process_structural_candles(
         broken_low_index = checkpoint.broken_low_index
         external_high = checkpoint.external_high
         external_low = checkpoint.external_low
+        historical_last_high = checkpoint.last_high
+        historical_last_low = checkpoint.last_low
         if checkpoint.last_swing is not None:
             last_swing_confirmation_index = checkpoint.last_swing.confirmation_index
 
@@ -317,6 +323,8 @@ def _process_structural_candles(
                     direction=state.direction,
                     last_high=last_high,
                     last_low=last_low,
+                    historical_last_high=historical_last_high,
+                    historical_last_low=historical_last_low,
                     last_swing_confirmation_index=last_swing_confirmation_index,
                     last_bos_index=last_bos_index,
                 )
@@ -377,6 +385,7 @@ def _process_structural_candles(
                 state.previous_swing = state.last_swing
                 state.last_swing = swing
                 last_high = swing
+                historical_last_high = swing
                 if swing.scope is StructureScope.EXTERNAL:
                     external_high = swing
                 swings.append(swing)
@@ -436,6 +445,7 @@ def _process_structural_candles(
                 state.previous_swing = state.last_swing
                 state.last_swing = swing
                 last_low = swing
+                historical_last_low = swing
                 if swing.scope is StructureScope.EXTERNAL:
                     external_low = swing
                 swings.append(swing)
