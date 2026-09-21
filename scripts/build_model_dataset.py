@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from market_engine.labels import MODEL_LABELS, SL_FIRST, TP_FIRST
+
 INPUT_PATH = Path("data/processed/momentum_training_1r_10.csv")
 OUTPUT_PATH = Path("data/processed/momentum_model_1r_10_binary.csv")
 
@@ -63,14 +65,14 @@ def main() -> None:
 
     label_column = "barrier_1r_10"
 
-    valid_labels = {"TP_FIRST", "SL_FIRST"}
+    valid_labels = MODEL_LABELS
 
     dataset = source.loc[
         source[label_column].isin(valid_labels)
     ].copy()
 
     dataset["target"] = (
-        dataset[label_column] == "TP_FIRST"
+        dataset[label_column] == TP_FIRST
     ).astype("int8")
 
     columns = [
@@ -104,7 +106,7 @@ def main() -> None:
 
     for target, count in counts.items():
         percentage = count / len(dataset) * 100
-        name = "SL_FIRST" if target == 0 else "TP_FIRST"
+        name = SL_FIRST if target == 0 else TP_FIRST
         print(f"  {target} = {name:8s}: {count:4d} ({percentage:6.2f}%)")
 
     print()
