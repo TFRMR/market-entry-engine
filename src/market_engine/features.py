@@ -242,6 +242,7 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     """Build the current initial feature set."""
     result = add_momentum_features(frame)
     result = add_volatility_features(result)
+    result = add_fvg_features(result)
     result = add_ema_features(result)
     result = add_support_resistance_features(result)
     result = add_recent_movement_features(result)
@@ -479,6 +480,158 @@ def add_active_structure_features(frame: pd.DataFrame) -> pd.DataFrame:
     )
     result["structure_bars_since_last_bos"] = (
         current_index - pd.Series(last_bos_index, index=result.index)
+    )
+
+    return result
+
+
+def add_fvg_features(frame: pd.DataFrame) -> pd.DataFrame:
+    """Add latest historical three-candle FVG context without look-ahead."""
+    required = {"high", "low", "close"}
+    missing = required.difference(frame.columns)
+    if missing:
+        raise ValueError(
+            "Missing FVG context columns: " + ", ".join(sorted(missing))
+        )
+
+    result = frame.copy()
+    size = len(result)
+
+    high = result["high"].to_numpy(dtype=float)
+    low = result["low"].to_numpy(dtype=float)
+    close = result["close"].to_numpy(dtype=float)
+
+    atr = (
+        result["atr_14"].to_numpy(dtype=float)
+        if "atr_14" in result.columns
+        else np.full(size, np.nan)
+    )
+
+    fvg_direction = np.empty(size, dtype=object)
+    fvg_direction[:] = None
+    fvg_lower = np.full(size, np.nan)
+    fvg_upper = np.full(size, np.nan)
+    fvg_size = np.full(size, np.nan)
+    fvg_creation_index = np.full(size, np.nan)
+    fvg_creation_atr = np.full(size, np.nan)
+    fvg_creation_timestamp = np.empty(size, dtype=object)
+    fvg_creation_timestamp[:] = None
+
+    latest_fvg = None
+
+    for position in range(size):
+        if position >= 2:
+            bullish_gap = low[position] > high[position - 2]
+            bearish_gap = high[position] < low[position - 2]
+
+            if bullish_gap:
+                latest_fvg = {
+                    "direction": "BULLISH",
+                    "lower": high[position - 2],
+                    "upper": low[position],
+                    "size": low[position] - high[position - 2],
+                    "creation_index": position,
+                    "creation_atr": atr[position],
+                    "creation_timestamp": (
+                        result["timestamp"].iloc[position]
+                        if "timestamp" in result.columns
+                        else None
+                    ),
+                }
+            elif bearish_gap:
+                latest_fvg = {
+                    "direction": "BEARISH",
+                    "lower": high[position],
+                    "upper": low[position - 2],
+                    "size": low[position - 2] - high[position],
+                    "creation_index": position,
+                    "creation_atr": atr[position],
+                    "creation_timestamp": (
+                        result["timestamp"].iloc[position]
+                        if "timestamp" in result.columns
+                        else None
+                    ),
+                }
+
+        if latest_fvg is not None:
+            fvg_direction[position] = latest_fvg["direction"]
+            fvg_lower[position] = latest_fvg["lower"]
+            fvg_upper[position] = latest_fvg["upper"]
+            fvg_size[position] = latest_fvg["size"]
+            fvg_creation_index[position] = latest_fvg["creation_index"]
+            fvg_creation_atr[position] = latest_fvg["creation_atr"]
+            fvg_creation_timestamp[position] = latest_fvg["creation_timestamp"]
+
+    current_index = np.arange(size, dtype=float)
+
+    result["fvg_present"] = (~pd.isna(fvg_creation_index)).astype(int)
+    result["fvg_direction"] = pd.Series(
+        fvg_direction,
+        index=result.index,
+        dtype="object",
+    )
+
+    result["fvg_size"] = pd.Series(fvg_size, index=result.index)
+    result["fvg_size_atr"] = np.nan
+
+    valid_creation_atr = (
+        ~pd.isna(fvg_size)
+        & ~pd.isna(fvg_creation_atr)
+        & (fvg_creation_atr > 0)
+    )
+    result.loc[valid_creation_atr, "fvg_size_atr"] = (
+        fvg_size[valid_creation_atr]
+        / fvg_creation_atr[valid_creation_atr]
+    )
+
+    result["fvg_age_bars"] = (
+        current_index - fvg_creation_index
+    )
+    result["fvg_distance"] = np.nan
+    result["fvg_position"] = np.nan
+
+    valid_fvg = ~pd.isna(fvg_lower) & ~pd.isna(fvg_upper)
+    inside_fvg = (
+        valid_fvg
+        & (close >= fvg_lower)
+        & (close <= fvg_upper)
+    )
+    below_fvg = valid_fvg & (close < fvg_lower)
+    above_fvg = valid_fvg & (close > fvg_upper)
+
+    result.loc[inside_fvg, "fvg_distance"] = 0.0
+    result.loc[below_fvg, "fvg_distance"] = (
+        fvg_lower[below_fvg] - close[below_fvg]
+    )
+    result.loc[above_fvg, "fvg_distance"] = (
+        close[above_fvg] - fvg_upper[above_fvg]
+    )
+
+    fvg_width = fvg_upper - fvg_lower
+    valid_position = valid_fvg & (fvg_width > 0)
+    result.loc[valid_position, "fvg_position"] = (
+        (close[valid_position] - fvg_lower[valid_position])
+        / fvg_width[valid_position]
+    )
+
+    result["fvg_distance_atr"] = np.nan
+    if "atr_14" in result.columns:
+        current_atr = result["atr_14"].to_numpy(dtype=float)
+        distance = result["fvg_distance"].to_numpy(dtype=float)
+        valid_distance_atr = (
+            ~pd.isna(distance)
+            & ~pd.isna(current_atr)
+            & (current_atr > 0)
+        )
+        result.loc[valid_distance_atr, "fvg_distance_atr"] = (
+            distance[valid_distance_atr]
+            / current_atr[valid_distance_atr]
+        )
+
+    result["fvg_creation_timestamp"] = pd.Series(
+        fvg_creation_timestamp,
+        index=result.index,
+        dtype="object",
     )
 
     return result

@@ -66,8 +66,32 @@ Rules:
 - fvg_distance
 - fvg_distance_atr
 - fvg_position
+- fvg_creation_timestamp
 
-FVG must be detected from past/current candles only and represented as a zone with explicit creation time.
+FVG v1 uses a deterministic three-candle imbalance:
+
+- Bullish FVG: `low[t] > high[t-2]`.
+- Bearish FVG: `high[t] < low[t-2]`.
+- Bullish zone: `[high[t-2], low[t]]`.
+- Bearish zone: `[high[t], low[t-2]]`.
+
+Temporal semantics:
+
+- An FVG is created and becomes available on candle `t`, never before `t`.
+- The feature context uses the latest FVG created at or before the current candle.
+- Historical FVGs are retained as context; v1 does not define a fill or invalidation rule.
+- `fvg_age_bars` is based on positional candle index in the raw feature frame, so INSIDE candles still advance age.
+- `fvg_creation_timestamp` records the source candle timestamp when available.
+
+Measurement semantics:
+
+- `fvg_size` is the positive zone width in price units.
+- `fvg_size_atr` is `fvg_size / ATR` using ATR available on the creation candle. If creation ATR is unavailable or non-positive, the value is undefined.
+- `fvg_distance` is the absolute price distance from close to the zone: zero while price is inside the zone, otherwise the distance to the nearest zone boundary.
+- `fvg_distance_atr` is `fvg_distance / current ATR`. If current ATR is unavailable or non-positive, the value is undefined.
+- `fvg_position` is `(close - zone_low) / zone_width`. Values below 0 indicate price below the zone, 0..1 indicate a close inside the zone, and values above 1 indicate price above the zone. The value is not clipped.
+
+FVG is contextual information, not a deterministic trade signal.
 
 ## 6. Order Block
 

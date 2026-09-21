@@ -5,6 +5,7 @@ import pytest
 from market_engine.features import (
     add_active_structure_features,
     add_ema_features,
+    add_fvg_features,
     add_micro_structure_features,
     add_momentum_features,
     add_recent_movement_features,
@@ -515,3 +516,91 @@ def test_active_structure_features_carry_snapshot_across_inside_candles():
         + result.loc[4, "close"]
         - result.loc[5, "close"]
     )
+
+
+def test_fvg_is_created_only_when_three_candle_gap_exists() -> None:
+    frame = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(
+                "2026-01-01",
+                periods=5,
+                freq="30min",
+            ),
+            "high": [10.0, 11.0, 12.0, 14.0, 13.0],
+            "low": [8.0, 9.0, 11.0, 13.0, 12.0],
+            "close": [9.0, 10.0, 11.5, 13.5, 12.5],
+        }
+    )
+
+    result = add_fvg_features(frame)
+
+    assert result.loc[0, "fvg_present"] == 0
+    assert result.loc[1, "fvg_present"] == 0
+    assert result.loc[2, "fvg_present"] == 1
+    assert result.loc[2, "fvg_direction"] == "BULLISH"
+    assert result.loc[2, "fvg_size"] == 1.0
+    assert result.loc[2, "fvg_age_bars"] == 0.0
+    assert result.loc[2, "fvg_creation_timestamp"] == frame.loc[2, "timestamp"]
+
+
+def test_fvg_does_not_use_future_candles() -> None:
+    frame = pd.DataFrame(
+        {
+            "high": [10.0, 11.0, 12.0, 14.0],
+            "low": [8.0, 9.0, 11.0, 13.0],
+            "close": [9.0, 10.0, 11.5, 13.5],
+        }
+    )
+
+    result = add_fvg_features(frame)
+
+    assert result.loc[0, "fvg_present"] == 0
+    assert result.loc[1, "fvg_present"] == 0
+    assert result.loc[2, "fvg_present"] == 1
+
+
+def test_fvg_context_uses_latest_created_zone_and_positional_age() -> None:
+    frame = pd.DataFrame(
+        {
+            "high": [10.0, 11.0, 12.0, 11.0, 13.0, 14.0],
+            "low": [8.0, 9.0, 11.0, 10.0, 12.0, 13.0],
+            "close": [9.0, 10.0, 10.5, 10.5, 12.5, 13.5],
+        }
+    )
+
+    result = add_fvg_features(frame)
+
+    assert result.loc[2, "fvg_direction"] == "BULLISH"
+    assert result.loc[2, "fvg_size"] == 1.0
+
+    # The same FVG remains active on the following raw candle.
+    assert result.loc[3, "fvg_direction"] == "BULLISH"
+    assert result.loc[3, "fvg_age_bars"] == 1.0
+    assert result.loc[3, "fvg_distance"] == 0.0
+    assert result.loc[3, "fvg_position"] == 0.5
+
+
+def test_fvg_distance_is_zero_inside_zone_and_positive_outside() -> None:
+    frame = pd.DataFrame(
+        {
+            "high": [10.0, 11.0, 12.0, 11.0, 14.0],
+            "low": [8.0, 9.0, 11.0, 10.0, 13.0],
+            "close": [9.0, 10.0, 10.5, 12.0, 13.5],
+        }
+    )
+
+    result = add_fvg_features(frame)
+
+    # Row 2 creates bullish FVG [10, 11].
+    assert result.loc[2, "fvg_distance"] == 0.0
+
+    # Row 3 keeps the same FVG and closes above it.
+    assert result.loc[3, "fvg_distance"] == 1.0
+    assert result.loc[3, "fvg_position"] == 2.0
+
+
+def test_fvg_requires_ohlc_context() -> None:
+    frame = pd.DataFrame({"close": [100.0]})
+
+    with pytest.raises(ValueError, match="Missing FVG context columns"):
+        add_fvg_features(frame)
