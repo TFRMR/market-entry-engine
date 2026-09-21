@@ -599,6 +599,86 @@ def test_fvg_distance_is_zero_inside_zone_and_positive_outside() -> None:
     assert result.loc[3, "fvg_position"] == 2.0
 
 
+def test_fvg_detects_bearish_gap_and_zone() -> None:
+    frame = pd.DataFrame(
+        {
+            "high": [12.0, 11.0, 10.0],
+            "low": [11.0, 9.0, 7.0],
+            "close": [11.5, 10.0, 8.0],
+        }
+    )
+
+    result = add_fvg_features(frame)
+
+    assert result.loc[2, "fvg_present"] == 1
+    assert result.loc[2, "fvg_direction"] == "BEARISH"
+    assert result.loc[2, "fvg_size"] == 1.0
+    assert result.loc[2, "fvg_age_bars"] == 0.0
+
+
+def test_fvg_atr_measurements_use_creation_and_current_atr() -> None:
+    frame = pd.DataFrame(
+        {
+            "high": [10.0, 11.0, 12.0, 11.0],
+            "low": [8.0, 9.0, 11.0, 10.0],
+            "close": [9.0, 10.0, 10.5, 12.0],
+            "atr_14": [2.0, 2.0, 2.0, 0.5],
+        }
+    )
+
+    result = add_fvg_features(frame)
+
+    # FVG [10, 11] is created at row 2 with ATR 2.0.
+    assert result.loc[2, "fvg_size_atr"] == 0.5
+
+    # Row 3 is above the zone by 1.0, using current ATR 0.5.
+    assert result.loc[3, "fvg_distance"] == 1.0
+    assert result.loc[3, "fvg_distance_atr"] == 2.0
+
+
+def test_fvg_latest_created_zone_replaces_previous_context() -> None:
+    frame = pd.DataFrame(
+        {
+            "high": [10.0, 11.0, 12.0, 14.0, 15.0],
+            "low": [8.0, 9.0, 11.0, 13.0, 11.5],
+            "close": [9.0, 10.0, 11.5, 13.5, 11.75],
+        }
+    )
+
+    result = add_fvg_features(frame)
+
+    assert result.loc[2, "fvg_direction"] == "BULLISH"
+    assert result.loc[2, "fvg_size"] == 1.0
+
+    # Row 3 creates a newer bullish FVG [11, 13].
+    assert result.loc[3, "fvg_direction"] == "BULLISH"
+    assert result.loc[3, "fvg_size"] == 2.0
+    assert result.loc[3, "fvg_age_bars"] == 0.0
+
+    assert result.loc[4, "fvg_size"] == 2.0
+    assert result.loc[4, "fvg_age_bars"] == 1.0
+
+
+def test_build_features_includes_fvg_context() -> None:
+    frame = make_sample_frame(rows=60)
+
+    result = build_features(frame)
+
+    expected_columns = {
+        "fvg_present",
+        "fvg_direction",
+        "fvg_size",
+        "fvg_size_atr",
+        "fvg_age_bars",
+        "fvg_distance",
+        "fvg_distance_atr",
+        "fvg_position",
+        "fvg_creation_timestamp",
+    }
+
+    assert expected_columns.issubset(result.columns)
+
+
 def test_fvg_requires_ohlc_context() -> None:
     frame = pd.DataFrame({"close": [100.0]})
 

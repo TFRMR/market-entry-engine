@@ -93,6 +93,17 @@ Measurement semantics:
 
 FVG is contextual information, not a deterministic trade signal.
 
+Quality-gate coverage:
+- bullish and bearish FVG detection are tested.
+- FVG availability is tested to prevent future-candle leakage.
+- latest-created FVG replacement and carry-forward semantics are tested.
+- positional `fvg_age_bars` semantics are tested.
+- creation-time and current-time ATR normalization are tested.
+- distance and position measurements are tested.
+- required OHLC inputs are tested.
+- `build_features()` integration is tested.
+- Full validation at this milestone: 136 tests passed, Ruff clean, and `git diff --check` clean.
+
 ## 6. Order Block
 
 - ob_present
