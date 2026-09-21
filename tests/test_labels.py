@@ -112,7 +112,7 @@ def test_setup_label_uses_structural_target_and_setup_features() -> None:
     assert result.loc[0, "setup_feature"] == 20
     assert result.loc[0, "entry_index"] == 2
     assert result.loc[0, "reward_risk"] == pytest.approx(2.0)
-    assert result.loc[0, "ambiguous_barrier"] is False
+    assert not bool(result.loc[0, "ambiguous_barrier"])
 
 
 def test_setup_label_maps_horizon_expiry_to_unresolved() -> None:
