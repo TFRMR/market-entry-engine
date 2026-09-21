@@ -198,10 +198,44 @@ def main() -> None:
     print()
     if args.with_features:
         print("Features:")
-        missing_features = int(
-            labeled[list(FEATURE_COLUMNS)].isna().any(axis=1).sum()
-        )
+        feature_values = labeled[list(FEATURE_COLUMNS)]
+        missing_mask = feature_values.isna().any(axis=1)
+        missing_features = int(missing_mask.sum())
         print(f"  Rows with missing feature values: {missing_features:,}")
+        if missing_features:
+            print("  Missing by feature:")
+            missing_by_feature = feature_values.isna().sum()
+            for column, count in missing_by_feature[missing_by_feature.gt(0)].sort_values(
+                ascending=False
+            ).items():
+                print(f"    {column:34s}: {int(count):5d}")
+
+            missing_setup_indices = labeled.loc[
+                missing_mask, "setup_index"
+            ].astype(int)
+            complete_mask = ~missing_mask
+            if complete_mask.any():
+                first_complete = int(
+                    labeled.loc[complete_mask, "setup_index"].min()
+                )
+                last_complete = int(
+                    labeled.loc[complete_mask, "setup_index"].max()
+                )
+                print(
+                    "  Complete-feature setup range: "
+                    f"{first_complete:,}..{last_complete:,}"
+                )
+                interior_missing = missing_setup_indices[
+                    missing_setup_indices > first_complete
+                ]
+                print(
+                    "  Missing rows after first complete setup: "
+                    f"{len(interior_missing):,}"
+                )
+            print(
+                "  Missing setup range: "
+                f"{missing_setup_indices.min():,}..{missing_setup_indices.max():,}"
+            )
         print()
     else:
         print("Features:")
