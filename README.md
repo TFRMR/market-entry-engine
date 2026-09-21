@@ -120,7 +120,13 @@ ahead of statistical modeling and entry optimization.
   - Short entry pays spread below the quoted price.
   - Execution risk is recalculated from the executed entry price to invalidation.
   - Raw MT5 `<SPREAD>` is not used directly; conversion to price units belongs to the data/source adapter.
-- [ ] Deterministic execution baseline
+- [x] Deterministic execution baseline
+  - Trade outcome is evaluated from candles after setup.
+  - Execution price and risk include the modeled spread.
+  - Target and invalidation are evaluated as deterministic price barriers.
+  - If stop and target are both touched in one candle, stop is resolved first.
+  - Outcomes are `TARGET`, `STOP`, or `OPEN`.
+  - PnL and R-multiple use the executed entry price.
 
 ### Statistical / ML evaluation
 
