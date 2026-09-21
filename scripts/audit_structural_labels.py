@@ -84,6 +84,8 @@ FEATURE_COLUMNS = (
     "structure_direction",
     "structure_distance_to_high",
     "structure_distance_to_low",
+    "structure_historical_distance_to_high",
+    "structure_historical_distance_to_low",
     "structure_bars_since_last_swing",
     "structure_bars_since_last_bos",
 )
