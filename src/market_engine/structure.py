@@ -223,8 +223,8 @@ def _process_structural_candles(
         broken_low_index = checkpoint.broken_low_index
         external_high = checkpoint.external_high
         external_low = checkpoint.external_low
-        historical_last_high = checkpoint.last_high
-        historical_last_low = checkpoint.last_low
+        historical_last_high = checkpoint.historical_last_high
+        historical_last_low = checkpoint.historical_last_low
         if checkpoint.last_swing is not None:
             last_swing_confirmation_index = checkpoint.last_swing.confirmation_index
 
@@ -345,6 +345,8 @@ def _process_structural_candles(
                     broken_low_index=broken_low_index,
                     external_high=external_high,
                     external_low=external_low,
+                    historical_last_high=historical_last_high,
+                    historical_last_low=historical_last_low,
                 )
                 if collect_snapshots:
                     return swings, events, checkpoint_out, snapshots
@@ -522,6 +524,8 @@ def _process_structural_candles(
                 direction=state.direction,
                 last_high=last_high,
                 last_low=last_low,
+                historical_last_high=historical_last_high,
+                historical_last_low=historical_last_low,
                 last_swing_confirmation_index=last_swing_confirmation_index,
                 last_bos_index=last_bos_index,
             )
