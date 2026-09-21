@@ -14,7 +14,11 @@ from market_engine.labels import (
     STRUCTURAL_LABEL_HORIZON,
     build_setup_label_dataset,
 )
-from market_engine.structure import build_structural_sequence, process_structural_candles
+from market_engine.structure import (
+    build_structural_sequence,
+    process_structural_candles,
+    process_structural_candles_with_context,
+)
 
 
 FEATURE_COLUMNS = (
@@ -106,6 +110,17 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Also build the full feature frame and audit feature missingness.",
     )
+    parser.add_argument(
+        "--inspect-structural-missing",
+        action="store_true",
+        help="Print concrete labeled setups whose active structural features are missing.",
+    )
+    parser.add_argument(
+        "--inspect-count",
+        type=int,
+        default=10,
+        help="Number of structural-missing setups to inspect (default: 10).",
+    )
     return parser.parse_args()
 
 
@@ -121,6 +136,8 @@ def main() -> None:
     candidates = build_setup_candidates(frame)
     structural = build_structural_sequence(frame)
     swings, _ = process_structural_candles(structural)
+    _, _, snapshots = process_structural_candles_with_context(structural)
+    snapshots_by_index = {snapshot.index: snapshot for snapshot in snapshots}
     feature_frame = build_features(frame) if args.with_features else None
 
     labeled = build_setup_label_dataset(
@@ -266,6 +283,57 @@ def main() -> None:
                 "  Missing setup range: "
                 f"{missing_setup_indices.min():,}..{missing_setup_indices.max():,}"
             )
+
+            if args.inspect_structural_missing:
+                structural_columns = (
+                    "structure_distance_to_high",
+                    "structure_distance_to_low",
+                    "structure_bars_since_last_swing",
+                )
+                structural_missing_mask = feature_values[list(
+                    structural_columns
+                )].isna().any(axis=1)
+                inspect_rows = labeled.loc[structural_missing_mask].head(
+                    args.inspect_count
+                )
+                print()
+                print("  Structural missing examples:")
+                if inspect_rows.empty:
+                    print("    None.")
+                for _, row in inspect_rows.iterrows():
+                    setup_index = int(row["setup_index"])
+                    snapshot = snapshots_by_index.get(setup_index)
+                    print(
+                        f"    setup={setup_index:,} "
+                        f"time={row['setup_timestamp']} "
+                        f"direction={row['direction']} "
+                        f"label={row['label']}"
+                    )
+                    if snapshot is None:
+                        print("      snapshot: none")
+                        continue
+                    high = snapshot.last_high
+                    low = snapshot.last_low
+                    print(
+                        "      snapshot: "
+                        f"direction={snapshot.direction.value if snapshot.direction else None} "
+                        f"last_bos={snapshot.last_bos_index} "
+                        f"last_swing_confirmation={snapshot.last_swing_confirmation_index}"
+                    )
+                    print(
+                        "      last_high: "
+                        f"{high.price if high else None} "
+                        f"(index={high.index if high else None}, "
+                        f"confirmation={high.confirmation_index if high else None}, "
+                        f"scope={high.scope.value if high else None})"
+                    )
+                    print(
+                        "      last_low:  "
+                        f"{low.price if low else None} "
+                        f"(index={low.index if low else None}, "
+                        f"confirmation={low.confirmation_index if low else None}, "
+                        f"scope={low.scope.value if low else None})"
+                    )
         print()
     else:
         print("Features:")
