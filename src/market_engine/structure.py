@@ -301,6 +301,35 @@ def _process_structural_candles(
             broken_low_index = bos_low.index
             last_bos_index = candle.index
 
+        # CHoCH is a directional transition event derived from a valid-swing
+        # break that runs against the canonical direction known before this
+        # candle. It is never emitted for the initial BOS.
+        if bos_high is not None and state.direction is Direction.DOWN:
+            events.append(
+                StructureEvent(
+                    index=candle.index,
+                    timestamp=candle.timestamp,
+                    event="BULLISH_CHOCH",
+                    direction=Direction.UP,
+                    swing_index=bos_high.index,
+                    swing_price=bos_high.price,
+                    scope=bos_high.scope,
+                )
+            )
+
+        if bos_low is not None and state.direction is Direction.UP:
+            events.append(
+                StructureEvent(
+                    index=candle.index,
+                    timestamp=candle.timestamp,
+                    event="BEARISH_CHOCH",
+                    direction=Direction.DOWN,
+                    swing_index=bos_low.index,
+                    swing_price=bos_low.price,
+                    scope=bos_low.scope,
+                )
+            )
+
         rebuild_after_candle = external_boundary_broken
         broke_high = (
             bos_high is not None
