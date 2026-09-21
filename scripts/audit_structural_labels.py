@@ -10,7 +10,9 @@ import pandas as pd
 from market_engine.data import load_mt5_csv
 from market_engine.entry import build_setup_candidates
 from market_engine.features import build_features, build_structural_features
+from market_engine.holdout import HISTORICAL_AUDIT_CUTOFF, split_historical_boundary
 from market_engine.labels import (
+    PRE_SETUP_FEATURE_COLUMNS,
     STRUCTURAL_LABEL_HORIZON,
     build_setup_label_dataset,
 )
@@ -123,6 +125,11 @@ def _parse_args() -> argparse.Namespace:
         help="With --with-features, audit the legacy momentum/EMA set as well (ablation only).",
     )
     parser.add_argument(
+        "--include-historical-audit",
+        action="store_true",
+        help="Also include the historical-audit partition; it is not pristine OOS.",
+    )
+    parser.add_argument(
         "--inspect-structural-missing",
         action="store_true",
         help="Print concrete labeled setups whose active structural features are missing.",
@@ -169,6 +176,7 @@ def main() -> None:
         feature_columns=feature_columns,
         horizon=args.horizon,
         events=events,
+        pre_feature_columns=PRE_SETUP_FEATURE_COLUMNS if args.with_features else (),
     )
 
     candidate_indices = {candidate.setup_index for candidate in candidates}
@@ -182,7 +190,20 @@ def main() -> None:
     no_exit_area = eligible_indices - labeled_indices
     excluded_other = candidate_indices - incomplete - no_exit_area - labeled_indices
 
+    development, historical_audit, purged_boundary = split_historical_boundary(
+        labeled, frame, args.horizon, HISTORICAL_AUDIT_CUTOFF
+    )
+    if not args.include_historical_audit:
+        labeled = development
+
     print("=== Structural Setup Label Audit ===")
+    print()
+    print("Chronological boundary policy:")
+    print(f"  Historical audit boundary: {HISTORICAL_AUDIT_CUTOFF}")
+    print("  Historical-audit rows are NOT pristine OOS; the full dataset was previously inspected.")
+    print(f"  Development rows:          {len(development):,}")
+    print(f"  Historical-audit rows:     {len(historical_audit):,}")
+    print(f"  Purged boundary rows:      {len(purged_boundary):,}")
     print()
     print("Candles:")
     print(f"  {len(frame):,}")
