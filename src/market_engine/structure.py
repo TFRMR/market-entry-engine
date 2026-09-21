@@ -330,6 +330,8 @@ def _process_structural_candles(
                 )
             )
 
+        prior_direction = state.direction
+
         rebuild_after_candle = external_boundary_broken
         broke_high = (
             bos_high is not None
