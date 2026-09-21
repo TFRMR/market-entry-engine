@@ -4,7 +4,10 @@ import pandas as pd
 import pytest
 
 from market_engine.entry import SetupCandidate
-from market_engine.features import build_structural_features
+from market_engine.features import (
+    add_order_block_features,
+    build_structural_features,
+)
 from market_engine.labels import build_setup_label_dataset
 from market_engine.setup_facts import (
     SETUP_FACT_COLUMNS,
@@ -186,3 +189,55 @@ def test_label_dataset_adds_setup_facts_only_when_events_are_given():
     assert with_facts.loc[0, "setup_broken_swing_age"] == 7.0
     assert with_facts.loc[0, "setup_entry_beyond_broken_swing_r"] == pytest.approx(0.2)
     assert not set(SETUP_FACT_COLUMNS) & set(without_facts.columns)
+
+
+def test_order_block_feature_projection_is_directional_and_historical():
+    rows = 8
+    frame = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(
+                "2026-01-01",
+                periods=rows,
+                freq="30min",
+            ),
+            "open": [10, 11, 13, 13, 11, 9, 11, 12],
+            "high": [12, 14, 14.5, 13.5, 13, 13.5, 14, 15],
+            "low": [9, 10, 11, 10, 8, 8, 9, 11],
+            "close": [11, 13, 14, 11, 9, 10, 11, 14],
+            "atr_14": [1.0] * rows,
+        }
+    )
+
+    result = add_order_block_features(frame)
+
+    assert result["ob_bullish_present"].iloc[:7].tolist() == [
+        0, 0, 0, 0, 0, 0, 0
+    ]
+    assert result["ob_bullish_present"].iloc[7] == 1
+    assert result["ob_bearish_present"].sum() == 0
+
+
+def test_order_block_feature_projection_uses_wick_to_wick_zone():
+    frame = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(
+                "2026-01-01",
+                periods=8,
+                freq="30min",
+            ),
+            "open": [10, 11, 13, 13, 11, 9, 11, 12],
+            "high": [12, 14, 14.5, 13.5, 13, 13.5, 14, 15],
+            "low": [9, 10, 11, 10, 8, 8, 9, 11],
+            "close": [11, 13, 14, 11, 9, 10, 11, 14],
+            "atr_14": [1.0] * 8,
+        }
+    )
+
+    result = add_order_block_features(frame)
+
+    assert result["ob_bullish_size"].iloc[7] == 5.0
+    assert result["ob_bullish_size_atr"].iloc[7] == 5.0
+    assert result["ob_bullish_age_bars"].iloc[7] == 0
+    assert result["ob_bullish_contains_price"].iloc[7] == 0
+    assert result["ob_bullish_distance"].iloc[7] == 1.0
+    assert result["ob_bullish_distance_atr"].iloc[7] == 1.0

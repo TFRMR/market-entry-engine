@@ -21,5 +21,8 @@ Rules:
 ## Feature entry points
 
 - `build_structural_features(frame)`: structure-only features (blueprint default).
+- `add_order_block_features(frame)`: historical directional Order Block
+  context derived from confirmed structural candidates; this is now part of
+  the structural blueprint.
 - `build_features(frame)`: legacy momentum/EMA/rolling set plus structure. Kept as
   an ablation baseline only; it is not part of the structural blueprint.

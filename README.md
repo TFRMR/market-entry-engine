@@ -77,6 +77,7 @@ Current next step:
 - implement deterministic Context v1 trend/regime and range semantics
 - implement deterministic Context v1 liquidity semantics
 - enrich context in small deterministic layers: trend/regime + range first, then liquidity, FVG, order block, S/R, location, displacement, pullback state, and event sequence
+- Order Block is currently implemented as a confirmed structural candidate layer plus historical directional feature projection; POI ranking remains separate
 - audit each layer for as-of correctness before ML feature selection
 
 The project deliberately keeps deterministic structure and feature contracts

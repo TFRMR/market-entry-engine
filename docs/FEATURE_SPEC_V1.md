@@ -141,6 +141,42 @@ OB is a contextual hypothesis, not a deterministic trade signal.
   structural importance, or higher-timeframe alignment is outside this
   structural candidate primitive.
 
+### Order Block feature projection contract
+
+The structural Order Block candidate layer is projected into historical
+directional context features without introducing POI ranking.
+
+For each direction, the projection exposes:
+
+- `ob_{direction}_present`: whether a known structural OB candidate exists.
+- `ob_{direction}_size`: wick-to-wick candidate zone width.
+- `ob_{direction}_size_atr`: zone width divided by current `atr_14`.
+- `ob_{direction}_age_bars`: bars elapsed since the BOS/CHoCH event that made
+  the candidate structurally available.
+- `ob_{direction}_distance`: distance from current close to the nearest zone
+  boundary, or `0` when the close is inside the zone.
+- `ob_{direction}_distance_atr`: distance divided by current `atr_14`.
+- `ob_{direction}_contains_price`: `1` when current close is inside the zone,
+  otherwise `0`.
+- `ob_{direction}_relative_position`: `(close - ob_low) / ob_size`.
+
+Historical availability is strict:
+
+- A candidate becomes available on its BOS/CHoCH event candle.
+- A candidate is never projected before its event index.
+- Only candidates whose underlying swing was confirmed before the event are
+  eligible.
+- When multiple candidates exist for one direction, the latest known
+  candidate is used by `(event_index, swing_index)` order. This is temporal
+  routing, not POI quality ranking.
+
+`atr_14` is an optional dependency for the projection. When ATR is absent,
+non-finite, or non-positive, ATR-normalized fields remain `NaN`.
+
+The projection intentionally does not encode freshness, mitigation,
+imbalance/OBIM, structural importance, or higher-timeframe alignment. Those
+remain separate context facts and future POI qualification logic.
+
 ## 4. Liquidity
 
 | Feature | Type | Meaning |

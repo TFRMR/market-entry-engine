@@ -5,7 +5,9 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from market_engine.order_block import find_order_block_candidates
 from market_engine.structure import (
+    Direction,
     StructureScope,
     SwingType,
     build_structural_sequence,
@@ -238,6 +240,151 @@ def add_recent_movement_features(frame: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
+def add_order_block_features(frame: pd.DataFrame) -> pd.DataFrame:
+    """Add directional historical order-block context features."""
+    required = {
+        "open",
+        "high",
+        "low",
+        "close",
+    }
+    missing = required.difference(frame.columns)
+    if missing:
+        raise ValueError(
+            "Missing order-block feature columns: "
+            + ", ".join(sorted(missing))
+        )
+
+    result = frame.copy()
+    size = len(result)
+
+    feature_names = (
+        "present",
+        "size",
+        "size_atr",
+        "age_bars",
+        "distance",
+        "distance_atr",
+        "contains_price",
+        "relative_position",
+    )
+
+    for direction in ("bullish", "bearish"):
+        result[f"ob_{direction}_present"] = 0
+        for name in feature_names[1:]:
+            result[f"ob_{direction}_{name}"] = np.nan
+
+    structural = build_structural_sequence(result)
+    swings, events = process_structural_candles(structural)
+    candidates = find_order_block_candidates(swings, events)
+
+    candles = [
+        {
+            "index": position,
+            "open": result.iloc[position]["open"],
+            "high": result.iloc[position]["high"],
+            "low": result.iloc[position]["low"],
+            "close": result.iloc[position]["close"],
+        }
+        for position in range(size)
+    ]
+
+    by_direction = {"bullish": [], "bearish": []}
+    for candidate in candidates:
+        key = "bullish" if candidate.direction is Direction.UP else "bearish"
+        by_direction[key].append(candidate)
+
+    for direction, direction_candidates in by_direction.items():
+        # The latest known candidate is the one with the latest event.
+        # Swing index breaks ties deterministically.
+        direction_candidates.sort(
+            key=lambda candidate: (candidate.event_index, candidate.swing_index)
+        )
+
+        latest = None
+        candidate_position = 0
+
+        for position in range(size):
+            while (
+                candidate_position < len(direction_candidates)
+                and direction_candidates[candidate_position].event_index <= position
+            ):
+                latest = direction_candidates[candidate_position]
+                candidate_position += 1
+
+            if latest is None:
+                continue
+
+            candle = candles[latest.swing_index]
+            zone_low = float(candle["low"])
+            zone_high = float(candle["high"])
+            zone_size = zone_high - zone_low
+
+            if zone_size <= 0:
+                continue
+
+            close = float(result.iloc[position]["close"])
+            atr = (
+                float(result.iloc[position]["atr_14"])
+                if "atr_14" in result.columns
+                else np.nan
+            )
+
+            distance = (
+                0.0
+                if zone_low <= close <= zone_high
+                else min(
+                    abs(close - zone_low),
+                    abs(close - zone_high),
+                )
+            )
+
+            relative_position = (close - zone_low) / zone_size
+
+            result.iloc[
+                position,
+                result.columns.get_loc(f"ob_{direction}_present"),
+            ] = 1
+            result.iloc[
+                position,
+                result.columns.get_loc(f"ob_{direction}_size"),
+            ] = zone_size
+            result.iloc[
+                position,
+                result.columns.get_loc(f"ob_{direction}_size_atr"),
+            ] = (
+                zone_size / atr
+                if np.isfinite(atr) and atr > 0
+                else np.nan
+            )
+            result.iloc[
+                position,
+                result.columns.get_loc(f"ob_{direction}_age_bars"),
+            ] = position - latest.event_index
+            result.iloc[
+                position,
+                result.columns.get_loc(f"ob_{direction}_distance"),
+            ] = distance
+            result.iloc[
+                position,
+                result.columns.get_loc(f"ob_{direction}_distance_atr"),
+            ] = (
+                distance / atr
+                if np.isfinite(atr) and atr > 0
+                else np.nan
+            )
+            result.iloc[
+                position,
+                result.columns.get_loc(f"ob_{direction}_contains_price"),
+            ] = int(zone_low <= close <= zone_high)
+            result.iloc[
+                position,
+                result.columns.get_loc(f"ob_{direction}_relative_position"),
+            ] = relative_position
+
+    return result
+
+
 def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     """Build the current initial feature set."""
     result = add_momentum_features(frame)
@@ -252,6 +399,7 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     result = add_active_structure_features(result)
     result = add_trend_range_features(result)
     result = add_liquidity_features(result)
+    result = add_order_block_features(result)
 
     return result
 
@@ -266,7 +414,8 @@ def build_structural_features(frame: pd.DataFrame) -> pd.DataFrame:
     result = add_structure_event_features(frame)
     result = add_active_structure_features(result)
     result = add_trend_range_features(result)
-    return add_liquidity_features(result)
+    result = add_liquidity_features(result)
+    return add_order_block_features(result)
 
 
 def add_micro_structure_features(frame: pd.DataFrame) -> pd.DataFrame:
