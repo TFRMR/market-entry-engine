@@ -5,11 +5,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import pandas as pd
-
 from market_engine.data import load_mt5_csv
 from market_engine.features import build_features
-
 
 EXPECTED_FEATURES = {
     "candle_range",
@@ -88,7 +85,7 @@ def main() -> int:
             print(f"  - {name}")
 
     print("\nNaN counts:")
-    nan_counts = featured[list(sorted(EXPECTED_FEATURES))].isna().sum()
+    nan_counts = featured[sorted(EXPECTED_FEATURES)].isna().sum()
 
     for name, count in nan_counts.items():
         if count:

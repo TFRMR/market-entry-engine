@@ -8,7 +8,6 @@ import pandas as pd
 import xgboost as xgb
 from sklearn.metrics import accuracy_score, log_loss, roc_auc_score
 
-
 INPUT = Path("data/processed/momentum_model_1r_10_binary.csv")
 
 FEATURES = [

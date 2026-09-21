@@ -5,7 +5,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-
 INPUT = Path("data/processed/momentum_model_1r_10_binary.csv")
 
 FEATURES = [

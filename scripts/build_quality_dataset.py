@@ -6,8 +6,6 @@ import pandas as pd
 
 from market_engine.data import load_mt5_csv
 from market_engine.features import build_features
-from market_engine.outcomes import add_barrier_outcomes
-
 
 DATA_PATH = Path(
     "data/raw/XAUUSDc_M30_202409012200_202609182030.csv"

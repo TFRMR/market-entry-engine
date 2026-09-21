@@ -6,7 +6,6 @@ import lightgbm as lgb
 import pandas as pd
 from sklearn.metrics import accuracy_score, log_loss, roc_auc_score
 
-
 INPUT_PATH = Path(
     "data/processed/momentum_model_1r_10_binary.csv"
 )

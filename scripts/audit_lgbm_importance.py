@@ -5,7 +5,6 @@ from pathlib import Path
 import lightgbm as lgb
 import pandas as pd
 
-
 INPUT_PATH = Path(
     "data/processed/momentum_model_1r_10_binary.csv"
 )

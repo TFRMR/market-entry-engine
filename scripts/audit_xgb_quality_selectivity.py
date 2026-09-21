@@ -2,10 +2,8 @@
 
 from pathlib import Path
 
-import xgboost as xgb
 import pandas as pd
-from sklearn.metrics import roc_auc_score
-
+import xgboost as xgb
 
 INPUT_PATH = Path(
     "data/processed/momentum_quality_5r.csv"

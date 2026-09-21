@@ -5,7 +5,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-
 INPUT = Path("data/processed/momentum_training_1r_10.csv")
 TARGET = "barrier_1r_10"
 

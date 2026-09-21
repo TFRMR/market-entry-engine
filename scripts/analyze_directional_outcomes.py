@@ -9,7 +9,6 @@ from market_engine.data import load_mt5_csv
 from market_engine.features import build_features
 from market_engine.outcomes import add_forward_returns
 
-
 HORIZONS = (1, 3, 5, 10)
 
 

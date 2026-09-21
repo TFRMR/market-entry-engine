@@ -10,7 +10,6 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 
-
 INPUT_PATH = Path(
     "data/processed/momentum_model_1r_10_binary.csv"
 )

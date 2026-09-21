@@ -5,7 +5,6 @@ from pathlib import Path
 import pandas as pd
 import xgboost as xgb
 
-
 INPUT_PATH = Path("data/processed/momentum_quality_5r.csv")
 OUTPUT_PATH = Path("reports/xgb_quality_rate_oos.csv")
 

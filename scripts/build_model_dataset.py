@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pandas as pd
 
-
 INPUT_PATH = Path("data/processed/momentum_training_1r_10.csv")
 OUTPUT_PATH = Path("data/processed/momentum_model_1r_10_binary.csv")
 
