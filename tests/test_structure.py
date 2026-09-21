@@ -646,3 +646,39 @@ def test_structure_snapshot_keeps_historical_swings_after_external_rebuild():
     assert snapshot.historical_last_high.index == 7
     assert snapshot.historical_last_low is not None
     assert snapshot.historical_last_low.index == 4
+
+
+def test_choch_marks_break_against_current_structure_direction():
+    candles = [
+        StructuralCandle(0, "00:00", 12, 9, 10, 11, CandleKind.UP),
+        StructuralCandle(1, "00:30", 14, 10, 11, 13, CandleKind.UP),
+        StructuralCandle(2, "01:00", 14.5, 11, 13, 14, CandleKind.UP),
+        StructuralCandle(3, "01:30", 13.5, 10, 13, 11, CandleKind.DOWN),
+        StructuralCandle(4, "02:00", 13, 8, 11, 9, CandleKind.DOWN),
+        StructuralCandle(5, "02:30", 12, 9, 9, 11, CandleKind.UP),
+        StructuralCandle(6, "03:00", 15, 11, 11, 14, CandleKind.UP),
+        StructuralCandle(7, "03:30", 10, 7, 14, 8, CandleKind.OUTSIDE),
+    ]
+
+    _, events = process_structural_candles(candles)
+
+    assert [(event.event, event.direction) for event in events if "CHOCH" in event.event] == [
+        ("BEARISH_CHOCH", Direction.DOWN),
+    ]
+
+
+def test_initial_bos_is_not_choch():
+    candles = [
+        StructuralCandle(0, "00:00", 12, 9, 10, 11, CandleKind.UP),
+        StructuralCandle(1, "00:30", 14, 10, 11, 13, CandleKind.UP),
+        StructuralCandle(2, "01:00", 14.5, 11, 13, 14, CandleKind.UP),
+        StructuralCandle(3, "01:30", 13.5, 10, 13, 11, CandleKind.DOWN),
+        StructuralCandle(4, "02:00", 13, 8, 11, 9, CandleKind.DOWN),
+        StructuralCandle(5, "02:30", 12, 9, 9, 11, CandleKind.UP),
+        StructuralCandle(6, "03:00", 15, 11, 11, 14, CandleKind.UP),
+    ]
+
+    _, events = process_structural_candles(candles)
+
+    assert any(event.event == "BULLISH_BOS" for event in events)
+    assert not any("CHOCH" in event.event for event in events[:1])
