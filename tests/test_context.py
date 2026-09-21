@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from market_engine.features import add_trend_range_features
+from market_engine.features import add_liquidity_features, add_trend_range_features
 
 
 def make_context_frame() -> pd.DataFrame:
@@ -67,3 +67,57 @@ def test_trend_range_requires_structural_columns() -> None:
 
     with pytest.raises(ValueError, match="Missing structural context columns"):
         add_trend_range_features(frame)
+
+
+def make_liquidity_frame() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "high": [105.0, 120.0, 121.0, 101.0],
+            "low": [95.0, 100.0, 99.0, 80.0],
+            "close": [100.0, 110.0, 101.0, 100.0],
+            "structure_last_valid_high": [np.nan, 120.0, 120.0, 120.0],
+            "structure_last_valid_low": [np.nan, 100.0, 100.0, 100.0],
+        }
+    )
+
+
+def test_liquidity_uses_pre_candle_confirmed_levels() -> None:
+    result = add_liquidity_features(make_liquidity_frame())
+
+    assert pd.isna(result.loc[0, "liquidity_high"])
+    assert result.loc[1, "liquidity_high"] == 105.0
+    assert result.loc[1, "liquidity_low"] == 95.0
+    assert result.loc[2, "liquidity_high"] == 120.0
+    assert result.loc[2, "liquidity_low"] == 100.0
+
+
+def test_high_liquidity_sweep_requires_reclaim() -> None:
+    result = add_liquidity_features(make_liquidity_frame())
+
+    assert result.loc[2, "liquidity_high_sweep"] == 1
+    assert result.loc[2, "liquidity_sweep"] == 1
+    assert result.loc[2, "liquidity_sweep_direction"] == "BEARISH"
+    assert result.loc[2, "liquidity_sweep_size"] == 1.0
+    assert result.loc[1, "liquidity_high_sweep"] == 0
+
+
+def test_low_liquidity_sweep_requires_reclaim() -> None:
+    result = add_liquidity_features(make_liquidity_frame())
+
+    assert result.loc[3, "liquidity_low_sweep"] == 1
+    assert result.loc[3, "liquidity_sweep"] == 1
+    assert result.loc[3, "liquidity_sweep_direction"] == "BULLISH"
+    assert result.loc[3, "liquidity_sweep_size"] == 20.0
+
+
+def test_liquidity_requires_structural_levels() -> None:
+    frame = pd.DataFrame(
+        {
+            "high": [105.0],
+            "low": [95.0],
+            "close": [100.0],
+        }
+    )
+
+    with pytest.raises(ValueError, match="Missing liquidity context columns"):
+        add_liquidity_features(frame)
