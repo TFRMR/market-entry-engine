@@ -120,6 +120,40 @@ def test_bos_breaks_only_previously_confirmed_valid_swing():
     assert bos[0].swing_index == 2
     assert bos[0].index == 6
 
+def test_snapshot_exposes_swing_only_after_confirmation_without_same_candle_bos():
+    candles = [
+        StructuralCandle(0, "2026-01-01 00:00", 12, 9, 10, 11, CandleKind.UP),
+        StructuralCandle(1, "2026-01-01 00:30", 14, 10, 11, 13, CandleKind.UP),
+        StructuralCandle(2, "2026-01-01 01:00", 14.5, 11, 13, 14, CandleKind.UP),
+        StructuralCandle(3, "2026-01-01 01:30", 13.5, 10, 13, 11, CandleKind.DOWN),
+        StructuralCandle(4, "2026-01-01 02:00", 13, 8, 11, 9, CandleKind.DOWN),
+        StructuralCandle(5, "2026-01-01 02:30", 12, 9, 9, 11, CandleKind.UP),
+        StructuralCandle(6, "2026-01-01 03:00", 15, 11, 11, 14, CandleKind.UP),
+    ]
+
+    _, events, snapshots = process_structural_candles_with_context(candles)
+
+    snapshot_by_index = {snapshot.index: snapshot for snapshot in snapshots}
+
+    assert snapshot_by_index[4].last_high is not None
+    assert snapshot_by_index[4].last_high.index == 2
+    assert snapshot_by_index[4].last_high.confirmation_index == 4
+
+    bos_at_confirmation = [
+        event
+        for event in events
+        if event.event.endswith("_BOS") and event.index == 4
+    ]
+    assert bos_at_confirmation == []
+
+    bos = [
+        event
+        for event in events
+        if event.event == "BULLISH_BOS"
+    ]
+    assert [(event.index, event.swing_index) for event in bos] == [(6, 2)]
+
+
 def test_first_bos_is_the_initial_structure_anchor():
     candles = [
         StructuralCandle(0, "2026-01-01 00:00", 12, 9, 10, 11, CandleKind.UP),

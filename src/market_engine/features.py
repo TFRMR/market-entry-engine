@@ -513,10 +513,14 @@ def add_trend_range_features(frame: pd.DataFrame) -> pd.DataFrame:
     result["trend_transition"] = (
         bullish_choch.astype(bool) | bearish_choch.astype(bool)
     ).astype(int)
-    result["trend_transition_direction"] = np.select(
-        [bullish_choch.astype(bool), bearish_choch.astype(bool)],
-        [1.0, -1.0],
-        default=np.nan,
+    result["trend_transition_direction"] = pd.Series(
+        np.select(
+            [bullish_choch.astype(bool), bearish_choch.astype(bool)],
+            ["UP", "DOWN"],
+            default=None,
+        ),
+        index=result.index,
+        dtype="object",
     )
 
     range_high = result["structure_last_valid_high"]

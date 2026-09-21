@@ -33,8 +33,8 @@ def test_choch_marks_trend_transition() -> None:
     result = add_trend_range_features(make_context_frame())
 
     assert result["trend_transition"].tolist() == [0, 0, 0, 1]
-    assert np.isnan(result.loc[0, "trend_transition_direction"])
-    assert result.loc[3, "trend_transition_direction"] == 1.0
+    assert pd.isna(result.loc[0, "trend_transition_direction"])
+    assert result.loc[3, "trend_transition_direction"] == "UP"
 
 
 def test_structural_range_position_is_as_of_current_state() -> None:
