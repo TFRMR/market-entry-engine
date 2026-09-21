@@ -74,8 +74,8 @@ Completed and locked:
 Current next step:
 
 - stability audit complete: persistent context contrasts are carried forward as candidates, not thresholds
-- lock deterministic Context v1 semantics, starting with trend/regime and range
-- enrich context in small deterministic layers: trend/regime, range, liquidity, FVG, order block, S/R, location, displacement, pullback state, and event sequence
+- implement deterministic Context v1 trend/regime and range semantics
+- enrich context in small deterministic layers: trend/regime + range first, then liquidity, FVG, order block, S/R, location, displacement, pullback state, and event sequence
 - audit each layer for as-of correctness before ML feature selection
 
 The project deliberately keeps deterministic structure and feature contracts
