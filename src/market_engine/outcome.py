@@ -27,9 +27,20 @@ def evaluate_trade(
     execution: Execution,
     target: ExitArea,
     frame: pd.DataFrame,
+    horizon: int | None = None,
 ) -> TradeOutcome:
-    """Evaluate the first deterministic stop/target outcome after entry."""
-    for index in range(candidate.setup_index + 1, len(frame)):
+    """Evaluate the first stop/target outcome within an optional horizon."""
+    if horizon is not None and horizon <= 0:
+        raise ValueError("horizon must be greater than zero.")
+
+    end_index = len(frame)
+    if horizon is not None:
+        end_index = min(
+            len(frame),
+            candidate.setup_index + 1 + horizon,
+        )
+
+    for index in range(candidate.setup_index + 1, end_index):
         candle = frame.iloc[index]
         hit_stop = (
             candle["low"] <= execution.invalidation_price
