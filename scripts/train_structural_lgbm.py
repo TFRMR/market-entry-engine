@@ -172,10 +172,16 @@ def main() -> None:
     train = dataset.iloc[:split_index]
     test = dataset.iloc[split_index:]
 
-    X_train = X.iloc[:split_index]
-    X_test = X.iloc[split_index:]
+    X_train_full = X.iloc[:split_index]
+    X_test_full = X.iloc[split_index:]
     y_train = y.iloc[:split_index]
     y_test = y.iloc[split_index:]
+
+    model_columns, constant_features, duplicate_feature_pairs = (
+        select_model_features(X_train_full)
+    )
+    X_train = X_train_full[model_columns]
+    X_test = X_test_full[model_columns]
 
     print()
     print("Dataset:")
@@ -185,7 +191,10 @@ def main() -> None:
     print(f"  Historical audit:     {len(historical_audit):,}")
     print(f"  Purged boundary:      {len(purged):,}")
     print(f"  Binary model rows:    {len(dataset):,}")
-    print(f"  Features:             {len(FEATURE_COLUMNS):,}")
+    print(f"  Raw features:         {len(FEATURE_COLUMNS):,}")
+    print(f"  Model features:       {len(model_columns):,}")
+    print(f"  Constant dropped:     {len(constant_features):,}")
+    print(f"  Duplicate dropped:    {len(duplicate_feature_pairs):,}")
 
     print()
     print("Model split:")
@@ -228,10 +237,22 @@ def main() -> None:
     print("Top feature importance:")
     importance = pd.Series(
         model.feature_importances_,
-        index=FEATURE_COLUMNS,
+        index=model_columns,
     ).sort_values(ascending=False)
 
     print(importance.head(20).to_string())
+
+    if constant_features:
+        print()
+        print("Constant features dropped:")
+        for column in constant_features:
+            print(f"  {column}")
+
+    if duplicate_feature_pairs:
+        print()
+        print("Duplicate feature aliases dropped:")
+        for duplicate, kept in duplicate_feature_pairs:
+            print(f"  {duplicate} == {kept} (kept {kept})")
 
     print()
     print("=== Structural LightGBM baseline complete ===")
