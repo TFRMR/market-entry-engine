@@ -109,6 +109,43 @@ CATEGORICAL_COLUMNS = (
 )
 
 
+
+def select_model_features(
+    train_frame: pd.DataFrame,
+) -> tuple[list[str], list[str], list[tuple[str, str]]]:
+    """Select non-constant, non-duplicate features using training data only."""
+
+    constant_features = [
+        column
+        for column in train_frame.columns
+        if train_frame[column].nunique(dropna=False) <= 1
+    ]
+
+    selected = [
+        column
+        for column in train_frame.columns
+        if column not in constant_features
+    ]
+
+    duplicate_feature_pairs: list[tuple[str, str]] = []
+    unique_columns: list[str] = []
+
+    for column in selected:
+        duplicate_of = next(
+            (
+                other
+                for other in unique_columns
+                if train_frame[column].equals(train_frame[other])
+            ),
+            None,
+        )
+        if duplicate_of is not None:
+            duplicate_feature_pairs.append((column, duplicate_of))
+        else:
+            unique_columns.append(column)
+
+    return unique_columns, constant_features, duplicate_feature_pairs
+
 def make_model() -> lgb.LGBMClassifier:
     return lgb.LGBMClassifier(
         objective="binary",
@@ -207,7 +244,7 @@ def main() -> None:
     model.fit(
         X_train,
         y_train,
-        categorical_feature=list(CATEGORICAL_COLUMNS),
+        categorical_feature=[column for column in CATEGORICAL_COLUMNS if column in model_columns],
     )
 
     train_probability = model.predict_proba(X_train)[:, 1]
