@@ -251,10 +251,7 @@ def _process_structural_candles(
             if high_target is not None
             and candle.index > high_target.confirmation_index
             and candle.high > high_target.price
-            and (
-                high_target.scope is StructureScope.INTERNAL
-                or broken_high_index != high_target.index
-            )
+            and broken_high_index != high_target.index
             else None
         )
 
@@ -273,10 +270,7 @@ def _process_structural_candles(
             if low_target is not None
             and candle.index > low_target.confirmation_index
             and candle.low < low_target.price
-            and (
-                low_target.scope is StructureScope.INTERNAL
-                or broken_low_index != low_target.index
-            )
+            and broken_low_index != low_target.index
             else None
         )
 
