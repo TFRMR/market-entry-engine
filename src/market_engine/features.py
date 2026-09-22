@@ -631,7 +631,6 @@ def add_active_structure_features(frame: pd.DataFrame) -> pd.DataFrame:
     historical_last_high = np.full(size, np.nan)
     historical_last_low = np.full(size, np.nan)
     last_swing_index = np.full(size, np.nan)
-    last_bos_index = np.full(size, np.nan)
     snapshot_mask = np.zeros(size, dtype=bool)
 
     direction_code = {
@@ -659,8 +658,6 @@ def add_active_structure_features(frame: pd.DataFrame) -> pd.DataFrame:
             historical_last_low[position] = snapshot.historical_last_low.price
         if snapshot.last_swing_confirmation_index is not None:
             last_swing_index[position] = snapshot.last_swing_confirmation_index
-        if snapshot.last_bos_index is not None:
-            last_bos_index[position] = snapshot.last_bos_index
 
     last_snapshot = np.maximum.accumulate(
         np.where(snapshot_mask, np.arange(size), -1)
@@ -679,7 +676,6 @@ def add_active_structure_features(frame: pd.DataFrame) -> pd.DataFrame:
     historical_last_high = carry(historical_last_high)
     historical_last_low = carry(historical_last_low)
     last_swing_index = carry(last_swing_index)
-    last_bos_index = carry(last_bos_index)
 
     result["structure_direction"] = pd.Series(
         direction,
@@ -708,10 +704,6 @@ def add_active_structure_features(frame: pd.DataFrame) -> pd.DataFrame:
     result["structure_bars_since_last_swing"] = (
         current_index - pd.Series(last_swing_index, index=result.index)
     )
-    result["structure_bars_since_last_bos"] = (
-        current_index - pd.Series(last_bos_index, index=result.index)
-    )
-
     return result
 
 

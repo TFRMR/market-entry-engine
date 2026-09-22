@@ -74,11 +74,6 @@ def test_active_structure_features_use_positional_candle_age() -> None:
         result["structure_bars_since_last_swing"].to_numpy(),
         equal_nan=True,
     )
-    assert np.allclose(
-        baseline["structure_bars_since_last_bos"].to_numpy(),
-        result["structure_bars_since_last_bos"].to_numpy(),
-        equal_nan=True,
-    )
 
 
 def test_build_features_contains_micro_structure_features() -> None:

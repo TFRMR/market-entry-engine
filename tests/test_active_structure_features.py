@@ -26,10 +26,3 @@ def test_active_structure_context_uses_confirmation_time():
     assert np.isclose(result.loc[4, "structure_distance_to_high"], 4.5)
     assert result.loc[4, "structure_bars_since_last_swing"] == 0
     assert result.loc[5, "structure_bars_since_last_swing"] == 1
-
-
-def test_active_structure_context_tracks_bos_age_without_lookahead():
-    result = add_active_structure_features(make_structure_frame())
-
-    assert pd.isna(result.loc[5, "structure_bars_since_last_bos"])
-    assert result.loc[6, "structure_bars_since_last_bos"] == 0

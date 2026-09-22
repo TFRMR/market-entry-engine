@@ -97,8 +97,88 @@ ALL_FEATURE_COLUMNS = (
     "structure_bars_since_last_bos",
 )
 
-STRUCTURAL_FEATURE_COLUMNS = tuple(
-    column for column in ALL_FEATURE_COLUMNS if column.startswith("structure_")
+STRUCTURAL_FEATURE_COLUMNS = (
+    # Structure event flags
+    "structure_bullish_bos",
+    "structure_bearish_bos",
+    "structure_bullish_choch",
+    "structure_bearish_choch",
+    "structure_swing_high_valid",
+    "structure_swing_low_valid",
+    "structure_internal_bos",
+    "structure_external_bos",
+    "structure_internal_swing",
+    "structure_external_swing",
+
+    # Confirmed structure state
+    "structure_last_valid_high",
+    "structure_last_valid_low",
+    "structure_hh",
+    "structure_hl",
+    "structure_lh",
+    "structure_ll",
+
+    # Event sequence
+    "structure_event_count",
+    "structure_last_event_index",
+    "structure_last_event_age",
+    "structure_last_event_type",
+    "structure_last_event_direction",
+    "structure_last_event_scope",
+    "structure_previous_event_index",
+    "structure_previous_event_age",
+    "structure_previous_event_type",
+    "structure_previous_event_direction",
+    "structure_previous_event_scope",
+    "structure_events_since_last_bos",
+    "structure_events_since_last_swing",
+    "structure_bars_since_last_bos",
+    "structure_bars_since_last_swing",
+
+    # Active structure
+    "structure_direction",
+    "structure_distance_to_high",
+    "structure_distance_to_low",
+    "structure_historical_distance_to_high",
+    "structure_historical_distance_to_low",
+
+    # Trend / range
+    "trend_regime",
+    "trend_transition",
+    "trend_transition_direction",
+    "range_state",
+    "range_high",
+    "range_low",
+    "range_width",
+    "range_position",
+    "range_position_zone",
+
+    # Liquidity
+    "liquidity_high",
+    "liquidity_low",
+    "liquidity_high_present",
+    "liquidity_low_present",
+    "distance_to_liquidity_high",
+    "distance_to_liquidity_low",
+    "liquidity_high_sweep",
+    "liquidity_low_sweep",
+    "liquidity_sweep",
+    "liquidity_sweep_direction",
+    "liquidity_sweep_size",
+
+    # Order block
+    "ob_bullish_present",
+    "ob_bullish_size",
+    "ob_bullish_age_bars",
+    "ob_bullish_distance",
+    "ob_bullish_contains_price",
+    "ob_bullish_relative_position",
+    "ob_bearish_present",
+    "ob_bearish_size",
+    "ob_bearish_age_bars",
+    "ob_bearish_distance",
+    "ob_bearish_contains_price",
+    "ob_bearish_relative_position",
 )
 
 
@@ -161,6 +241,115 @@ def main() -> None:
     swings, events = process_structural_candles(structural)
     _, _, snapshots = process_structural_candles_with_context(structural)
     snapshots_by_index = {snapshot.index: snapshot for snapshot in snapshots}
+
+    # Point-in-time structural chronology audit.
+    chronology_violations: list[tuple[int, str, int, int]] = []
+    for snapshot in snapshots:
+        setup_index = snapshot.index
+
+        if (
+            snapshot.last_bos_index is not None
+            and snapshot.last_bos_index > setup_index
+        ):
+            chronology_violations.append(
+                (
+                    setup_index,
+                    "last_bos_index",
+                    snapshot.last_bos_index,
+                    setup_index,
+                )
+            )
+
+        for name, swing in (
+            ("last_high", snapshot.last_high),
+            ("last_low", snapshot.last_low),
+        ):
+            if swing is None:
+                continue
+            if swing.confirmation_index > setup_index:
+                chronology_violations.append(
+                    (
+                        setup_index,
+                        f"{name}.confirmation_index",
+                        swing.confirmation_index,
+                        setup_index,
+                    )
+                )
+
+    print("Point-in-time structural chronology:")
+    print(f"  Snapshot chronology violations: {len(chronology_violations):,}")
+    if chronology_violations:
+        for violation in chronology_violations[:10]:
+            setup_index, field, value, current_index = violation
+            print(
+                f"    setup={setup_index:,} "
+                f"{field}={value:,} > current={current_index:,}"
+            )
+        raise AssertionError(
+            "Structural snapshot contains future-confirmed state."
+        )
+    print("  Validation: PASS")
+
+    feature_chronology_violations: list[tuple[int, str, int, int]] = []
+
+    for setup_index in sorted(snapshots_by_index):
+        snapshot = snapshots_by_index[setup_index]
+
+        checks = (
+            ("last_bos_index", snapshot.last_bos_index),
+            (
+                "last_swing_confirmation_index",
+                snapshot.last_swing_confirmation_index,
+            ),
+            (
+                "last_high.confirmation_index",
+                snapshot.last_high.confirmation_index
+                if snapshot.last_high is not None
+                else None,
+            ),
+            (
+                "last_low.confirmation_index",
+                snapshot.last_low.confirmation_index
+                if snapshot.last_low is not None
+                else None,
+            ),
+            (
+                "historical_last_high.confirmation_index",
+                snapshot.historical_last_high.confirmation_index
+                if snapshot.historical_last_high is not None
+                else None,
+            ),
+            (
+                "historical_last_low.confirmation_index",
+                snapshot.historical_last_low.confirmation_index
+                if snapshot.historical_last_low is not None
+                else None,
+            ),
+        )
+
+        for field, value in checks:
+            if value is not None and value > setup_index:
+                feature_chronology_violations.append(
+                    (setup_index, field, value, setup_index)
+                )
+
+    print("Feature source chronology:")
+    print(
+        "  Structural feature chronology violations: "
+        f"{len(feature_chronology_violations):,}"
+    )
+    if feature_chronology_violations:
+        for violation in feature_chronology_violations[:10]:
+            setup_index, field, value, current_index = violation
+            print(
+                f"    setup={setup_index:,} "
+                f"{field}={value:,} > current={current_index:,}"
+            )
+        raise AssertionError(
+            "Feature source contains future-confirmed structural state."
+        )
+    print("  Validation: PASS")
+
     feature_frame = None
     feature_columns: tuple[str, ...] = ()
     if args.with_features:
@@ -182,6 +371,7 @@ def main() -> None:
         events=events,
         pre_feature_columns=PRE_SETUP_FEATURE_COLUMNS if args.with_features else (),
     )
+
 
     development, historical_audit, purged_boundary = split_historical_boundary(
         labeled, frame, args.horizon, HISTORICAL_AUDIT_CUTOFF
@@ -461,6 +651,201 @@ def main() -> None:
         print("Features:")
         print("  Skipped (use --with-features for the full feature audit).")
         print()
+    print("Missingness semantics:")
+
+    high_distance_missing = labeled["structure_distance_to_high"].isna()
+    low_distance_missing = labeled["structure_distance_to_low"].isna()
+
+    no_confirmed_swing = high_distance_missing & low_distance_missing
+    print(
+        "  Both structure distances missing with no confirmed swing: "
+        f"{int(no_confirmed_swing.sum()):,}"
+    )
+
+    partial_structure_distance_missing = (
+        high_distance_missing ^ low_distance_missing
+    )
+    print(
+        "  Partial structure-distance missingness: "
+        f"{int(partial_structure_distance_missing.sum()):,}"
+    )
+
+    sweep_missing = labeled["liquidity_sweep_size"].isna()
+    no_sweep = labeled["liquidity_sweep"].fillna(False) == False
+    unexpected_sweep_missing = sweep_missing & ~no_sweep
+    print(
+        "  liquidity_sweep_size missing without no-sweep state: "
+        f"{int(unexpected_sweep_missing.sum()):,}"
+    )
+
+    transition_missing = labeled["trend_transition_direction"].isna()
+    no_transition = labeled["trend_transition"].fillna(False) == False
+    unexpected_transition_missing = transition_missing & ~no_transition
+    print(
+        "  trend_transition_direction missing without no-transition state: "
+        f"{int(unexpected_transition_missing.sum()):,}"
+    )
+
+    bars_since_swing_missing = labeled["structure_bars_since_last_swing"].isna()
+    print(
+        "  bars_since_last_swing missing: "
+        f"{int(bars_since_swing_missing.sum()):,}"
+    )
+    print(
+        "  bars_since_last_swing missing while either structural distance exists: "
+        f"{int((bars_since_swing_missing & ~no_confirmed_swing).sum()):,}"
+    )
+
+    for direction in ("bullish", "bearish"):
+        present = labeled[f"ob_{direction}_present"].fillna(False)
+        attributes = labeled[
+            [
+                f"ob_{direction}_size",
+                f"ob_{direction}_age_bars",
+                f"ob_{direction}_distance",
+                f"ob_{direction}_contains_price",
+                f"ob_{direction}_relative_position",
+            ]
+        ]
+        attribute_missing_without_presence = (
+            attributes.isna().any(axis=1) & present
+        )
+        print(
+            f"  {direction} OB attributes missing while present: "
+            f"{int(attribute_missing_without_presence.sum()):,}"
+        )
+
+    unexpected = (
+        int(unexpected_sweep_missing.sum())
+        + int(unexpected_transition_missing.sum())
+        + int((bars_since_swing_missing & ~no_confirmed_swing).sum())
+    )
+
+    if unexpected:
+        raise AssertionError(
+            f"Unexpected feature missingness detected: {unexpected}"
+        )
+
+    print("  Validation: PASS")
+    print()
+
+    if args.with_features:
+        print("Feature dataset schema audit:")
+
+        feature_frame = labeled[list(STRUCTURAL_FEATURE_COLUMNS)]
+
+        # 1. Dtype inventory
+        dtype_counts = feature_frame.dtypes.astype(str).value_counts()
+        print("  Dtypes:")
+        for dtype, count in dtype_counts.items():
+            print(f"    {dtype:<12}: {int(count):,}")
+
+        # 2. Feature availability
+        availability = 1.0 - feature_frame.isna().mean()
+        print(
+            "  Feature availability:"
+            f" min={availability.min():.2%}"
+            f" median={availability.median():.2%}"
+            f" max={availability.max():.2%}"
+        )
+
+        # 3. Constant features
+        constant_features = [
+            column
+            for column in feature_frame.columns
+            if feature_frame[column].nunique(dropna=False) <= 1
+        ]
+
+        print(
+            "  Constant features: "
+            f"{len(constant_features):,}"
+        )
+        for column in constant_features:
+            print(f"    {column}")
+
+        # 4. Near-constant features
+        near_constant_features: list[tuple[str, float, object]] = []
+
+        for column in feature_frame.columns:
+            counts = feature_frame[column].value_counts(dropna=False)
+            if counts.empty:
+                continue
+
+            dominant_value = counts.index[0]
+            dominant_share = counts.iloc[0] / len(feature_frame)
+
+            if (
+                dominant_share >= 0.995
+                and feature_frame[column].nunique(dropna=False) > 1
+            ):
+                near_constant_features.append(
+                    (column, dominant_share, dominant_value)
+                )
+
+        print(
+            "  Near-constant features (>=99.5% one value): "
+            f"{len(near_constant_features):,}"
+        )
+        for column, share, value in near_constant_features:
+            print(
+                f"    {column}: "
+                f"{share:.2%} dominant={value!r}"
+            )
+
+        # 5. Exact duplicate feature columns
+        duplicate_feature_pairs: list[tuple[str, str]] = []
+
+        columns = list(feature_frame.columns)
+        for i, left in enumerate(columns):
+            for right in columns[i + 1:]:
+                if feature_frame[left].equals(feature_frame[right]):
+                    duplicate_feature_pairs.append((left, right))
+
+        print(
+            "  Exact duplicate feature pairs: "
+            f"{len(duplicate_feature_pairs):,}"
+        )
+        for left, right in duplicate_feature_pairs:
+            print(f"    {left} == {right}")
+
+        # 6. Semantic dtype groups
+        categorical_features = [
+            column
+            for column in feature_frame.columns
+            if feature_frame[column].dtype == "object"
+        ]
+
+        boolean_features = [
+            column
+            for column in feature_frame.columns
+            if str(feature_frame[column].dtype) == "bool"
+        ]
+
+        numeric_features = [
+            column
+            for column in feature_frame.columns
+            if column not in categorical_features
+            and column not in boolean_features
+        ]
+
+        print(
+            "  Feature groups:"
+            f" categorical={len(categorical_features):,}"
+            f" boolean={len(boolean_features):,}"
+            f" numeric={len(numeric_features):,}"
+        )
+
+        print("  Categorical features:")
+        for column in categorical_features:
+            print(f"    {column}")
+
+        print("  Boolean features:")
+        for column in boolean_features:
+            print(f"    {column}")
+
+        print("  Validation: PASS")
+        print()
+
     print("=== Audit complete ===")
 
 
