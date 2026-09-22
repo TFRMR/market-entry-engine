@@ -22,6 +22,8 @@ from market_engine.labels import (
 )
 from market_engine.setup_facts import SETUP_FACT_COLUMNS
 from market_engine.structure import (
+    Direction,
+    SwingType,
     build_structural_sequence,
     process_structural_candles,
     process_structural_candles_with_context,
@@ -135,8 +137,9 @@ STRUCTURAL_FEATURE_COLUMNS = (
 
 
 def _audit_sr_point_in_time(frame: pd.DataFrame) -> None:
-    """Audit that S/R state never exists without a known level."""
+    """Independently verify S/R lifecycle and completed-D1 point-in-time mapping."""
     violations = 0
+
     for prefix in ("local", "d1"):
         for side in ("support", "resistance"):
             level = frame[f"{prefix}_sr_{side}"]
@@ -145,22 +148,81 @@ def _audit_sr_point_in_time(frame: pd.DataFrame) -> None:
             violations += int((state.notna() & level.isna()).sum())
             violations += int((event.ne("NONE") & level.isna()).sum())
 
-    if "timestamp" in frame.columns:
-        ts = pd.to_datetime(frame["timestamp"])
-        present = (
-            frame["d1_sr_support_present"].astype(bool)
-            | frame["d1_sr_resistance_present"].astype(bool)
+    ts = pd.to_datetime(frame["timestamp"])
+    daily = (
+        frame.assign(_date=ts.dt.floor("D"))
+        .groupby("_date", sort=True)
+        .agg(
+            open=("open", "first"),
+            high=("high", "max"),
+            low=("low", "min"),
+            close=("close", "last"),
         )
-        # A D1 level may only appear on a later date, never on the date
-        # whose daily candle created that structural reference.
-        daily_first = {}
-        for date, group in frame.groupby(ts.dt.floor("D"), sort=True):
-            if present.loc[group.index].any():
-                daily_first[date] = True
-        dates = sorted(daily_first)
-        if dates:
-            first = dates[0]
-            if not (ts[present] >= first).all():
+        .reset_index()
+    )
+
+    if not daily.empty:
+        structural = build_structural_sequence(daily)
+        swings, _ = process_structural_candles(structural)
+        _, _, snapshots = process_structural_candles_with_context(structural)
+        by_confirmation: dict[int, list] = {}
+        for swing in swings:
+            by_confirmation.setdefault(swing.confirmation_index, []).append(swing)
+
+        highs = []
+        lows = []
+        expected = []
+        snapshot_by_index = {s.index: s for s in snapshots}
+
+        for position, row in daily.iterrows():
+            for swing in by_confirmation.get(position, []):
+                (highs if swing.swing_type is SwingType.HIGH else lows).append(swing)
+
+            snapshot = snapshot_by_index.get(position)
+            direction = 0
+            if snapshot is not None and snapshot.direction is not None:
+                direction = 1 if snapshot.direction is Direction.UP else -1
+
+            close = float(row["close"])
+            supports = [s for s in lows if s.price <= close]
+            resistances = [s for s in highs if s.price >= close]
+            support = max(supports, key=lambda s: (s.price, s.confirmation_index)) if supports else None
+            resistance = min(resistances, key=lambda s: (s.price, -s.confirmation_index)) if resistances else None
+
+            expected.append({
+                "_date": row["_date"],
+                "direction": direction,
+                "support": support.price if support else float("nan"),
+                "resistance": resistance.price if resistance else float("nan"),
+            })
+
+        expected = pd.DataFrame(expected)
+        expected["available_date"] = expected["_date"].shift(-1)
+        expected = expected.dropna(subset=["available_date"])
+
+        actual = frame.copy()
+        actual["_date"] = ts.dt.floor("D")
+        actual = actual.merge(expected, left_on="_date", right_on="available_date", how="left")
+
+        for actual_col, expected_col in (
+            ("d1_structure_direction", "direction"),
+            ("d1_sr_support", "support"),
+            ("d1_sr_resistance", "resistance"),
+        ):
+            a = actual[actual_col].to_numpy(dtype=float)
+            e = actual[expected_col].to_numpy(dtype=float)
+            mismatch = ~(
+                (pd.isna(a) & pd.isna(e))
+                | (pd.notna(a) & pd.notna(e) & (abs(a - e) <= 1e-12))
+            )
+            violations += int(mismatch.sum())
+
+        first_date = actual["_date"].min()
+        if first_date in set(expected["available_date"]):
+            pass
+        else:
+            first_rows = actual["_date"].eq(first_date)
+            if actual.loc[first_rows, "d1_sr_support"].notna().any() or actual.loc[first_rows, "d1_sr_resistance"].notna().any():
                 violations += 1
 
     print("S/R point-in-time + lifecycle:")
@@ -168,7 +230,6 @@ def _audit_sr_point_in_time(frame: pd.DataFrame) -> None:
     if violations:
         raise AssertionError("S/R point-in-time/lifecycle audit failed.")
     print("  Validation: PASS")
-
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
