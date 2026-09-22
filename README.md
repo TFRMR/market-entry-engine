@@ -49,6 +49,8 @@ Current deterministic layers include:
 - FVG and historical FVG reference routing
 - structural Order Block candidates and directional historical projection
 - structural S/R and Location
+- local + D1 structural S/R mapping
+- S/R interaction lifecycle: CREATED / TESTED / SWEPT / BROKEN / FLIPPED
 - pullback state
 
 Removed from the current primitive feature stack:
@@ -136,6 +138,20 @@ ahead of statistical modeling and entry optimization.
   - Sums PnL and R-multiple for closed outcomes.
   - Does not assume position sizing, portfolio allocation, or additional costs.
 
+### Research track / current checkpoint
+
+The deterministic path is intentionally being completed before OOS/ML is resumed.
+
+Current locked sequence:
+
+OHLCV -> Price Action -> INTERNAL/EXTERNAL Market Structure -> BOS/CHoCH/Event Sequence -> Market Context -> POI/Location context -> S/R lifecycle -> point-in-time audit -> OOS/ML.
+
+Structural S/R is contextual, not directional authority. Market direction comes from Market Structure; S/R provides location and interaction context.
+
+D1 S/R is reconstructed from completed daily candles and mapped only to later intraday candles, so the active daily candle cannot leak its unfinished high/low/close into M30 context.
+
+S/R lifecycle is deterministic and descriptive. It does not produce a trading signal or probability. Outcome quality remains an empirical/OOS question.
+
 ### Statistical / ML evaluation
 
 - [x] Label contract
@@ -198,4 +214,4 @@ The current development quality gate is:
 Ruff covers the engine and test suite. Exploratory audit scripts under
 scripts/audit_*.py are intentionally excluded from the production lint scope.
 
-Current checkpoint: Market Structure v1 is locked, including deterministic CHoCH semantics; Context v1 trend/regime, range, liquidity, FVG, Order Block, canonical structural S/R + Location, and FVG Transition reference routing are implemented and quality-gated; next step is deterministic displacement / price action.
+Current checkpoint: Market Structure v1 and Context v1 are locked through local/D1 structural S/R mapping and deterministic S/R lifecycle. Point-in-time S/R + lifecycle auditing is now wired into the structural audit script. OOS/ML remains blocked until this audit is run on the real dataset and passes.
