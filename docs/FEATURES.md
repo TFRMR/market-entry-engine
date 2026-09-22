@@ -183,6 +183,75 @@ Values near 0 indicate a close near the low.
 
 ---
 
+## 4.8 close_position_in_range
+
+`close_position_in_range` uses the same deterministic candle-range position as `close_position`:
+
+```text
+close_position_in_range =
+    (close - low) / candle_range
+```
+
+It is an explicit displacement/price-action field name for the feature specification. The existing `close_position` field remains available for compatibility.
+
+---
+
+## 4.9 upper_wick_to_body
+
+```text
+upper_wick_to_body =
+    upper_wick / candle_body
+```
+
+where:
+
+```text
+upper_wick = high - max(open, close)
+candle_body = abs(close - open)
+```
+
+If the candle body is zero, the ratio is undefined (`NaN`) rather than infinite.
+
+---
+
+## 4.10 lower_wick_to_body
+
+```text
+lower_wick_to_body =
+    lower_wick / candle_body
+```
+
+where:
+
+```text
+lower_wick = min(open, close) - low
+candle_body = abs(close - open)
+```
+
+If the candle body is zero, the ratio is undefined (`NaN`) rather than infinite.
+
+---
+
+## 4.11 Displacement normalized by ATR
+
+The existing `range_to_atr` measurement is also exposed as the explicit displacement field `range_atr`:
+
+```text
+range_atr = candle_range / ATR14
+```
+
+Body displacement is normalized similarly:
+
+```text
+body_atr = candle_body / ATR14
+```
+
+Both fields use ATR calculated by the existing volatility feature layer. If ATR is unavailable or non-positive, the normalized value is undefined.
+
+These measurements describe candle geometry and volatility expansion. They do not define a trading signal or fixed threshold.
+
+---
+
 # 5. Candle Size Relative to Volatility
 
 A momentum candle should not be evaluated only by its body percentage.
@@ -698,6 +767,9 @@ candle_range
 upper_wick_ratio
 lower_wick_ratio
 close_position
+close_position_in_range
+upper_wick_to_body
+lower_wick_to_body
 ```
 
 ### Volatility
@@ -705,6 +777,8 @@ close_position
 ```text
 atr_14
 range_to_atr
+range_atr
+body_atr
 ```
 
 ### EMA
