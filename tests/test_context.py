@@ -145,7 +145,6 @@ def make_sr_location_frame() -> pd.DataFrame:
             "close": [100.0, 108.0, 100.0, 100.0, 118.0],
             "structure_direction": [1.0, 1.0, 1.0, 1.0, 1.0],
             "range_position": [0.2, 0.3, 0.4, 0.6, 0.8],
-            "atr_14": [2.0, 2.0, 2.0, 2.0, 2.0],
         }
     )
 
@@ -273,7 +272,7 @@ def test_sr_location_next_structure_level_follows_direction(
     assert down_result.loc[1, "distance_to_next_structure_level"] == 13.0
 
 
-def test_sr_location_normalizes_distance_by_current_atr(
+def test_sr_location_exposes_raw_structural_distances(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     frame = make_sr_location_frame().iloc[[0]].copy()
@@ -296,6 +295,4 @@ def test_sr_location_normalizes_distance_by_current_atr(
 
     assert result.loc[0, "distance_to_support"] == 5.0
     assert result.loc[0, "distance_to_resistance"] == 10.0
-    assert result.loc[0, "distance_to_support_atr"] == 2.5
-    assert result.loc[0, "distance_to_resistance_atr"] == 5.0
     assert result.loc[0, "leg_position"] == 0.2

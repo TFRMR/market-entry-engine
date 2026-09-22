@@ -1,4 +1,4 @@
-"""Feature engineering for the momentum-candle strategy."""
+"""Deterministic price-action and market-structure feature engineering."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ from market_engine.structure import (
 )
 
 
-def add_momentum_features(frame: pd.DataFrame) -> pd.DataFrame:
-    """Add basic momentum-candle structure features."""
+def add_price_action_features(frame: pd.DataFrame) -> pd.DataFrame:
+    """Add deterministic candle price-action features."""
     result = frame.copy()
 
     candle_range = result["high"] - result["low"]
@@ -37,7 +37,6 @@ def add_momentum_features(frame: pd.DataFrame) -> pd.DataFrame:
         result["high"]
         - result[["open", "close"]].max(axis=1)
     )
-
     lower_wick = (
         result[["open", "close"]].min(axis=1)
         - result["low"]
@@ -49,7 +48,6 @@ def add_momentum_features(frame: pd.DataFrame) -> pd.DataFrame:
     result.loc[valid_range, "upper_wick_ratio"] = (
         upper_wick[valid_range] / candle_range[valid_range]
     )
-
     result.loc[valid_range, "lower_wick_ratio"] = (
         lower_wick[valid_range] / candle_range[valid_range]
     )
@@ -74,194 +72,7 @@ def add_momentum_features(frame: pd.DataFrame) -> pd.DataFrame:
         lower_wick[valid_body] / candle_body[valid_body]
     )
 
-    result["is_momentum_candle"] = result["body_ratio"] >= 0.80
-    result["is_bullish"] = result["close"] > result["open"]
-    result["is_bearish"] = result["close"] < result["open"]
-
     return result
-
-
-def add_volatility_features(
-    frame: pd.DataFrame,
-    atr_period: int = 14,
-) -> pd.DataFrame:
-    """Add ATR and candle-range-to-ATR features."""
-    if atr_period <= 0:
-        raise ValueError("atr_period must be greater than zero.")
-
-    result = frame.copy()
-
-    previous_close = result["close"].shift(1)
-
-    true_range = pd.concat(
-        [
-            result["high"] - result["low"],
-            (result["high"] - previous_close).abs(),
-            (result["low"] - previous_close).abs(),
-        ],
-        axis=1,
-    ).max(axis=1)
-
-    result["true_range"] = true_range
-
-    result["atr_14"] = true_range.rolling(
-        window=atr_period,
-        min_periods=atr_period,
-    ).mean()
-
-    result["range_to_atr"] = np.nan
-
-    valid_atr = result["atr_14"].gt(0)
-
-    result.loc[valid_atr, "range_to_atr"] = (
-        result.loc[valid_atr, "candle_range"]
-        / result.loc[valid_atr, "atr_14"]
-    )
-
-    result["range_atr"] = result["range_to_atr"]
-
-    result["body_atr"] = np.nan
-    result.loc[valid_atr, "body_atr"] = (
-        result.loc[valid_atr, "candle_body"]
-        / result.loc[valid_atr, "atr_14"]
-    )
-
-    return result
-
-
-def add_ema_features(frame: pd.DataFrame) -> pd.DataFrame:
-    """Add EMA 5, 20, and 50 context features."""
-    result = frame.copy()
-
-    result["ema_5"] = result["close"].ewm(
-        span=5,
-        adjust=False,
-        min_periods=5,
-    ).mean()
-
-    result["ema_20"] = result["close"].ewm(
-        span=20,
-        adjust=False,
-        min_periods=20,
-    ).mean()
-
-    result["ema_50"] = result["close"].ewm(
-        span=50,
-        adjust=False,
-        min_periods=50,
-    ).mean()
-
-    result["price_vs_ema_5"] = result["close"] - result["ema_5"]
-    result["price_vs_ema_20"] = result["close"] - result["ema_20"]
-    result["price_vs_ema_50"] = result["close"] - result["ema_50"]
-
-    result["ema_5_vs_20"] = result["ema_5"] - result["ema_20"]
-    result["ema_20_vs_50"] = result["ema_20"] - result["ema_50"]
-
-    result["ema_alignment"] = np.select(
-        [
-            (
-                (result["ema_5"] > result["ema_20"])
-                & (result["ema_20"] > result["ema_50"])
-            ),
-            (
-                (result["ema_5"] < result["ema_20"])
-                & (result["ema_20"] < result["ema_50"])
-            ),
-        ],
-        [1, -1],
-        default=0,
-    )
-
-    return result
-
-
-def add_support_resistance_features(
-    frame: pd.DataFrame,
-    short_window: int = 20,
-    long_window: int = 50,
-) -> pd.DataFrame:
-    """Add prior-window support/resistance context without look-ahead."""
-    if short_window <= 0:
-        raise ValueError("short_window must be greater than zero.")
-
-    if long_window <= 0:
-        raise ValueError("long_window must be greater than zero.")
-
-    if short_window >= long_window:
-        raise ValueError("short_window must be smaller than long_window.")
-
-    result = frame.copy()
-
-    previous_high = result["high"].shift(1)
-    previous_low = result["low"].shift(1)
-
-    result["previous_high_20"] = previous_high.rolling(
-        window=short_window,
-        min_periods=short_window,
-    ).max()
-
-    result["previous_low_20"] = previous_low.rolling(
-        window=short_window,
-        min_periods=short_window,
-    ).min()
-
-    result["previous_high_50"] = previous_high.rolling(
-        window=long_window,
-        min_periods=long_window,
-    ).max()
-
-    result["previous_low_50"] = previous_low.rolling(
-        window=long_window,
-        min_periods=long_window,
-    ).min()
-
-    result["distance_to_high_20"] = (
-        result["previous_high_20"] - result["close"]
-    )
-
-    result["distance_to_low_20"] = (
-        result["close"] - result["previous_low_20"]
-    )
-
-    result["distance_to_high_50"] = (
-        result["previous_high_50"] - result["close"]
-    )
-
-    result["distance_to_low_50"] = (
-        result["close"] - result["previous_low_50"]
-    )
-
-    result["breakout_above_20"] = (
-        result["high"] > result["previous_high_20"]
-    )
-
-    result["breakout_below_20"] = (
-        result["low"] < result["previous_low_20"]
-    )
-
-    result["breakout_above_50"] = (
-        result["high"] > result["previous_high_50"]
-    )
-
-    result["breakout_below_50"] = (
-        result["low"] < result["previous_low_50"]
-    )
-
-    return result
-
-
-def add_recent_movement_features(frame: pd.DataFrame) -> pd.DataFrame:
-    """Add recent price-return context features."""
-    result = frame.copy()
-
-    result["return_3"] = result["close"].pct_change(periods=3)
-    result["return_6"] = result["close"].pct_change(periods=6)
-    result["return_12"] = result["close"].pct_change(periods=12)
-
-    return result
-
-
 def add_order_block_features(frame: pd.DataFrame) -> pd.DataFrame:
     """Add directional historical order-block context features."""
     required = {
@@ -283,10 +94,8 @@ def add_order_block_features(frame: pd.DataFrame) -> pd.DataFrame:
     feature_names = (
         "present",
         "size",
-        "size_atr",
         "age_bars",
         "distance",
-        "distance_atr",
         "contains_price",
         "relative_position",
     )
@@ -346,12 +155,6 @@ def add_order_block_features(frame: pd.DataFrame) -> pd.DataFrame:
                 continue
 
             close = float(result.iloc[position]["close"])
-            atr = (
-                float(result.iloc[position]["atr_14"])
-                if "atr_14" in result.columns
-                else np.nan
-            )
-
             distance = (
                 0.0
                 if zone_low <= close <= zone_high
@@ -373,28 +176,12 @@ def add_order_block_features(frame: pd.DataFrame) -> pd.DataFrame:
             ] = zone_size
             result.iloc[
                 position,
-                result.columns.get_loc(f"ob_{direction}_size_atr"),
-            ] = (
-                zone_size / atr
-                if np.isfinite(atr) and atr > 0
-                else np.nan
-            )
-            result.iloc[
-                position,
                 result.columns.get_loc(f"ob_{direction}_age_bars"),
             ] = position - latest.event_index
             result.iloc[
                 position,
                 result.columns.get_loc(f"ob_{direction}_distance"),
             ] = distance
-            result.iloc[
-                position,
-                result.columns.get_loc(f"ob_{direction}_distance_atr"),
-            ] = (
-                distance / atr
-                if np.isfinite(atr) and atr > 0
-                else np.nan
-            )
             result.iloc[
                 position,
                 result.columns.get_loc(f"ob_{direction}_contains_price"),
@@ -495,10 +282,7 @@ def add_sr_location_features(frame: pd.DataFrame) -> pd.DataFrame:
     result["distance_to_support"] = close - support
     result["distance_to_resistance"] = resistance - close
 
-    result["distance_to_support_atr"] = np.nan
-    result["distance_to_resistance_atr"] = np.nan
     result["distance_to_next_structure_level"] = np.nan
-    result["distance_to_next_structure_level_atr"] = np.nan
 
     valid_next = np.isfinite(next_structure)
     next_distance = np.full(size, np.nan)
@@ -506,27 +290,6 @@ def add_sr_location_features(frame: pd.DataFrame) -> pd.DataFrame:
         next_structure[valid_next] - close[valid_next]
     )
     result["distance_to_next_structure_level"] = next_distance
-
-    if "atr_14" in result.columns:
-        atr = result["atr_14"].to_numpy(dtype=float)
-        valid_atr = np.isfinite(atr) & (atr > 0)
-
-        support_distance = result["distance_to_support"].to_numpy(dtype=float)
-        resistance_distance = result["distance_to_resistance"].to_numpy(dtype=float)
-
-        valid_support = valid_atr & np.isfinite(support_distance)
-        valid_resistance = valid_atr & np.isfinite(resistance_distance)
-        valid_next_atr = valid_atr & np.isfinite(next_distance)
-
-        result.loc[valid_support, "distance_to_support_atr"] = (
-            support_distance[valid_support] / atr[valid_support]
-        )
-        result.loc[valid_resistance, "distance_to_resistance_atr"] = (
-            resistance_distance[valid_resistance] / atr[valid_resistance]
-        )
-        result.loc[valid_next_atr, "distance_to_next_structure_level_atr"] = (
-            next_distance[valid_next_atr] / atr[valid_next_atr]
-        )
 
     result["leg_position"] = result.get(
         "range_position",
@@ -537,32 +300,24 @@ def add_sr_location_features(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_features(frame: pd.DataFrame) -> pd.DataFrame:
-    """Build the current initial feature set."""
-    result = add_momentum_features(frame)
-    result = add_volatility_features(result)
+    """Build the deterministic price-action and structural feature set."""
+    result = add_price_action_features(frame)
     result = add_fvg_features(result)
-    result = add_ema_features(result)
-    result = add_support_resistance_features(result)
-    result = add_recent_movement_features(result)
     result = add_micro_structure_features(result)
-    result = add_volume_features(result)
     result = add_structure_event_features(result)
     result = add_active_structure_features(result)
     result = add_trend_range_features(result)
     result = add_liquidity_features(result)
     result = add_order_block_features(result)
     result = add_sr_location_features(result)
-
+    result = add_pullback_features(result)
     return result
 
 
-def build_structural_features(frame: pd.DataFrame) -> pd.DataFrame:
-    """Build structure-only features for the structural blueprint.
 
-    Unlike build_features, this adds no momentum, EMA, rolling-level, or volume
-    columns. build_features remains available as the legacy baseline for
-    ablation studies.
-    """
+def build_structural_features(frame: pd.DataFrame) -> pd.DataFrame:
+    """Build the structural feature set for the current blueprint."""
+
     result = add_structure_event_features(frame)
     result = add_active_structure_features(result)
     result = add_trend_range_features(result)
@@ -802,19 +557,12 @@ def add_fvg_features(frame: pd.DataFrame) -> pd.DataFrame:
     low = result["low"].to_numpy(dtype=float)
     close = result["close"].to_numpy(dtype=float)
 
-    atr = (
-        result["atr_14"].to_numpy(dtype=float)
-        if "atr_14" in result.columns
-        else np.full(size, np.nan)
-    )
-
     fvg_direction = np.empty(size, dtype=object)
     fvg_direction[:] = None
     fvg_lower = np.full(size, np.nan)
     fvg_upper = np.full(size, np.nan)
     fvg_size = np.full(size, np.nan)
     fvg_creation_index = np.full(size, np.nan)
-    fvg_creation_atr = np.full(size, np.nan)
     fvg_creation_timestamp = np.empty(size, dtype=object)
     fvg_creation_timestamp[:] = None
 
@@ -832,7 +580,6 @@ def add_fvg_features(frame: pd.DataFrame) -> pd.DataFrame:
                     "upper": low[position],
                     "size": low[position] - high[position - 2],
                     "creation_index": position,
-                    "creation_atr": atr[position],
                     "creation_timestamp": (
                         result["timestamp"].iloc[position]
                         if "timestamp" in result.columns
@@ -846,7 +593,6 @@ def add_fvg_features(frame: pd.DataFrame) -> pd.DataFrame:
                     "upper": low[position - 2],
                     "size": low[position - 2] - high[position],
                     "creation_index": position,
-                    "creation_atr": atr[position],
                     "creation_timestamp": (
                         result["timestamp"].iloc[position]
                         if "timestamp" in result.columns
@@ -860,7 +606,6 @@ def add_fvg_features(frame: pd.DataFrame) -> pd.DataFrame:
             fvg_upper[position] = latest_fvg["upper"]
             fvg_size[position] = latest_fvg["size"]
             fvg_creation_index[position] = latest_fvg["creation_index"]
-            fvg_creation_atr[position] = latest_fvg["creation_atr"]
             fvg_creation_timestamp[position] = latest_fvg["creation_timestamp"]
 
     current_index = np.arange(size, dtype=float)
@@ -873,18 +618,6 @@ def add_fvg_features(frame: pd.DataFrame) -> pd.DataFrame:
     )
 
     result["fvg_size"] = pd.Series(fvg_size, index=result.index)
-    result["fvg_size_atr"] = np.nan
-
-    valid_creation_atr = (
-        ~pd.isna(fvg_size)
-        & ~pd.isna(fvg_creation_atr)
-        & (fvg_creation_atr > 0)
-    )
-    result.loc[valid_creation_atr, "fvg_size_atr"] = (
-        fvg_size[valid_creation_atr]
-        / fvg_creation_atr[valid_creation_atr]
-    )
-
     result["fvg_age_bars"] = (
         current_index - fvg_creation_index
     )
@@ -915,25 +648,127 @@ def add_fvg_features(frame: pd.DataFrame) -> pd.DataFrame:
         / fvg_width[valid_position]
     )
 
-    result["fvg_distance_atr"] = np.nan
-    if "atr_14" in result.columns:
-        current_atr = result["atr_14"].to_numpy(dtype=float)
-        distance = result["fvg_distance"].to_numpy(dtype=float)
-        valid_distance_atr = (
-            ~pd.isna(distance)
-            & ~pd.isna(current_atr)
-            & (current_atr > 0)
-        )
-        result.loc[valid_distance_atr, "fvg_distance_atr"] = (
-            distance[valid_distance_atr]
-            / current_atr[valid_distance_atr]
-        )
-
     result["fvg_creation_timestamp"] = pd.Series(
         fvg_creation_timestamp,
         index=result.index,
         dtype="object",
     )
+
+    return result
+
+
+def add_pullback_features(frame: pd.DataFrame) -> pd.DataFrame:
+    """Project the active structural pullback state into dataframe features."""
+    result = frame.copy()
+    structural = build_structural_sequence(result)
+    _, _, snapshots = process_structural_candles_with_context(structural)
+
+    size = len(result)
+    active = np.full(size, np.nan)
+    direction = np.full(size, np.nan)
+    start_index = np.full(size, np.nan)
+    extreme_index = np.full(size, np.nan)
+    price = np.full(size, np.nan)
+    depth = np.full(size, np.nan)
+    bars = np.full(size, np.nan)
+    snapshot_mask = np.zeros(size, dtype=bool)
+
+    direction_code = {
+        "UP": 1.0,
+        "DOWN": -1.0,
+    }
+
+    for snapshot in snapshots:
+        position = snapshot.index
+        if position < 0 or position >= size:
+            raise ValueError("Structure snapshot index is outside the feature frame.")
+
+        snapshot_mask[position] = True
+
+        if snapshot.pullback is None:
+            active[position] = 0.0
+            continue
+
+        pullback = snapshot.pullback
+        active[position] = 1.0
+        direction[position] = direction_code[pullback.direction.value]
+        start_index[position] = pullback.index
+        extreme_index[position] = pullback.extreme_index
+        price[position] = pullback.price
+
+        if pullback.direction is Direction.UP:
+            depth[position] = pullback.extreme_price - pullback.price
+        else:
+            depth[position] = pullback.price - pullback.extreme_price
+
+        bars[position] = position - pullback.index
+
+    last_snapshot = np.maximum.accumulate(
+        np.where(snapshot_mask, np.arange(size), -1)
+    )
+
+    def carry(values: np.ndarray) -> np.ndarray:
+        valid = last_snapshot >= 0
+        output = np.full(size, np.nan)
+        positions = np.clip(last_snapshot, 0, None)
+        output[valid] = values[positions[valid]]
+        return output
+
+    active = carry(active)
+    direction = carry(direction)
+    start_index = carry(start_index)
+    extreme_index = carry(extreme_index)
+    price = carry(price)
+    depth = carry(depth)
+    bars = carry(bars)
+
+    result["pullback_active"] = pd.Series(
+        active,
+        index=result.index,
+    ).fillna(0.0)
+
+    result["pullback_direction"] = pd.Series(
+        direction,
+        index=result.index,
+    )
+
+    result["pullback_start_index"] = pd.Series(
+        start_index,
+        index=result.index,
+    )
+
+    result["pullback_extreme_index"] = pd.Series(
+        extreme_index,
+        index=result.index,
+    )
+
+    result["pullback_price"] = pd.Series(
+        price,
+        index=result.index,
+    )
+
+    result["pullback_depth"] = pd.Series(
+        depth,
+        index=result.index,
+    )
+
+    result["pullback_bars"] = pd.Series(
+        bars,
+        index=result.index,
+    )
+
+    inactive = result["pullback_active"].eq(0)
+    result.loc[
+        inactive,
+        [
+            "pullback_direction",
+            "pullback_start_index",
+            "pullback_extreme_index",
+            "pullback_price",
+            "pullback_depth",
+            "pullback_bars",
+        ],
+    ] = np.nan
 
     return result
 
@@ -1064,35 +899,5 @@ def add_liquidity_features(frame: pd.DataFrame) -> pd.DataFrame:
     result.loc[low_sweep, "liquidity_sweep_size"] = (
         liquidity_low[low_sweep] - result.loc[low_sweep, "low"]
     )
-
-    return result
-
-def add_volume_features(
-    frame: pd.DataFrame,
-    volume_window: int = 20,
-) -> pd.DataFrame:
-    """Add tick-volume context features."""
-    if volume_window <= 0:
-        raise ValueError("volume_window must be greater than zero.")
-
-    result = frame.copy()
-
-    previous_volume = result["tick_volume"].shift(1)
-
-    average_volume = previous_volume.rolling(
-        window=volume_window,
-        min_periods=volume_window,
-    ).mean()
-
-    result["volume_ratio_20"] = np.nan
-
-    valid_average = average_volume.gt(0)
-
-    result.loc[valid_average, "volume_ratio_20"] = (
-        result.loc[valid_average, "tick_volume"]
-        / average_volume[valid_average]
-    )
-
-    result["volume_change_1"] = result["tick_volume"].pct_change(periods=1)
 
     return result

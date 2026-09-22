@@ -229,15 +229,12 @@ def test_order_block_feature_projection_uses_wick_to_wick_zone():
             "high": [12, 14, 14.5, 13.5, 13, 13.5, 14, 15],
             "low": [9, 10, 11, 10, 8, 8, 9, 11],
             "close": [11, 13, 14, 11, 9, 10, 11, 14],
-            "atr_14": [1.0] * 8,
-        }
+            }
     )
 
     result = add_order_block_features(frame)
 
     assert result["ob_bullish_size"].iloc[7] == 5.0
-    assert result["ob_bullish_size_atr"].iloc[7] == 5.0
     assert result["ob_bullish_age_bars"].iloc[7] == 0
     assert result["ob_bullish_contains_price"].iloc[7] == 0
     assert result["ob_bullish_distance"].iloc[7] == 1.0
-    assert result["ob_bullish_distance_atr"].iloc[7] == 1.0

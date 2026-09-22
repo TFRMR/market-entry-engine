@@ -115,6 +115,7 @@ class StructureCheckpoint:
 class StructureSnapshot:
     index: int
     direction: Direction | None
+    pullback: PullbackCandidate | None
     last_high: ValidSwing | None
     last_low: ValidSwing | None
     historical_last_high: ValidSwing | None
@@ -353,6 +354,7 @@ def _process_structural_candles(
                 StructureSnapshot(
                     index=candle.index,
                     direction=state.direction,
+                    pullback=state.pullback,
                     last_high=last_high,
                     last_low=last_low,
                     historical_last_high=historical_last_high,
@@ -440,12 +442,12 @@ def _process_structural_candles(
                 state.pullback = None
             elif candle.low > state.pullback.price:
                 state.pullback = PullbackCandidate(
-                    index=candle.index,
+                    index=state.pullback.index,
                     timestamp=candle.timestamp,
                     price=candle.low,
                     direction=Direction.UP,
-                    extreme_index=state.extreme.index,
-                    extreme_price=state.extreme.high,
+                    extreme_index=state.pullback.extreme_index,
+                    extreme_price=state.pullback.extreme_price,
                 )
 
         else:
@@ -499,12 +501,12 @@ def _process_structural_candles(
                 state.pullback = None
             elif candle.high < state.pullback.price:
                 state.pullback = PullbackCandidate(
-                    index=candle.index,
+                    index=state.pullback.index,
                     timestamp=candle.timestamp,
                     price=candle.high,
                     direction=Direction.DOWN,
-                    extreme_index=state.extreme.index,
-                    extreme_price=state.extreme.low,
+                    extreme_index=state.pullback.extreme_index,
+                    extreme_price=state.pullback.extreme_price,
                 )
 
         if rebuild_after_candle:
@@ -554,6 +556,7 @@ def _process_structural_candles(
             StructureSnapshot(
                 index=candle.index,
                 direction=state.direction,
+                pullback=state.pullback,
                 last_high=last_high,
                 last_low=last_low,
                 historical_last_high=historical_last_high,

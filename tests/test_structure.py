@@ -722,3 +722,78 @@ def test_initial_bos_is_not_choch():
 
     assert any(event.event == "BULLISH_BOS" for event in events)
     assert not any("CHOCH" in event.event for event in events[:1])
+
+
+def test_structure_snapshot_exposes_active_pullback():
+    candles = [
+        StructuralCandle(0, "00:00", 12, 9, 10, 11, CandleKind.UP),
+        StructuralCandle(1, "00:30", 14, 10, 11, 13, CandleKind.UP),
+        StructuralCandle(2, "01:00", 14.5, 11, 13, 14, CandleKind.UP),
+        StructuralCandle(3, "01:30", 13.5, 12, 13, 12.5, CandleKind.DOWN),
+    ]
+
+    _, _, snapshots = process_structural_candles_with_context(candles)
+
+    snapshot = snapshots[-1]
+
+    assert snapshot.pullback is not None
+    assert snapshot.pullback.direction is Direction.UP
+    assert snapshot.pullback.index == 3
+    assert snapshot.pullback.extreme_index == 2
+    assert snapshot.pullback.price == 12
+
+
+def test_structure_snapshot_updates_pullback_candidate():
+    candles = [
+        StructuralCandle(0, "00:00", 12, 9, 10, 11, CandleKind.UP),
+        StructuralCandle(1, "00:30", 14, 10, 11, 13, CandleKind.UP),
+        StructuralCandle(2, "01:00", 14.5, 11, 13, 14, CandleKind.UP),
+        StructuralCandle(3, "01:30", 13.5, 12, 13, 12.5, CandleKind.DOWN),
+        StructuralCandle(4, "02:00", 14, 12.5, 12.5, 13.5, CandleKind.UP),
+    ]
+
+    _, _, snapshots = process_structural_candles_with_context(candles)
+
+    assert snapshots[-2].pullback is not None
+    assert snapshots[-2].pullback.index == 3
+    assert snapshots[-2].pullback.price == 12
+
+    assert snapshots[-1].pullback is not None
+    assert snapshots[-1].pullback.index == 3
+    assert snapshots[-1].pullback.price == 12.5
+
+
+def test_structure_snapshot_clears_pullback_when_swing_is_confirmed():
+    candles = [
+        StructuralCandle(0, "00:00", 12, 9, 10, 11, CandleKind.UP),
+        StructuralCandle(1, "00:30", 14, 10, 11, 13, CandleKind.UP),
+        StructuralCandle(2, "01:00", 14.5, 11, 13, 14, CandleKind.UP),
+        StructuralCandle(3, "01:30", 13.5, 12, 13, 12.5, CandleKind.DOWN),
+        StructuralCandle(4, "02:00", 13, 10, 12, 10.5, CandleKind.DOWN),
+    ]
+
+    _, _, snapshots = process_structural_candles_with_context(candles)
+
+    assert snapshots[-2].pullback is not None
+    assert snapshots[-1].pullback is None
+    assert snapshots[-1].last_high is not None
+    assert snapshots[-1].last_high.index == 2
+
+
+def test_structure_snapshot_pullback_does_not_use_future_candles():
+    candles = [
+        StructuralCandle(0, "00:00", 12, 9, 10, 11, CandleKind.UP),
+        StructuralCandle(1, "00:30", 14, 10, 11, 13, CandleKind.UP),
+        StructuralCandle(2, "01:00", 14.5, 11, 13, 14, CandleKind.UP),
+        StructuralCandle(3, "01:30", 13.5, 12, 13, 12.5, CandleKind.DOWN),
+        StructuralCandle(4, "02:00", 13, 10, 12, 10.5, CandleKind.DOWN),
+    ]
+
+    _, _, snapshots = process_structural_candles_with_context(candles)
+
+    active = snapshots[-2]
+
+    assert active.index == 3
+    assert active.pullback is not None
+    assert active.pullback.price == 12
+    assert active.last_high is None
