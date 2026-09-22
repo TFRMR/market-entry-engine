@@ -284,6 +284,105 @@ def print_feature_drift(
     )
 
 
+
+def print_feature_outcome_drift(
+    dataset: pd.DataFrame,
+    model_columns: list[str],
+    bucket_count: int = 4,
+    top_n: int = 15,
+) -> None:
+    """Describe early-vs-late feature/outcome relationship drift."""
+    
+    buckets = pd.qcut(
+        dataset["setup_timestamp"].rank(method="first"),
+        q=bucket_count,
+        labels=False,
+    )
+    grouped = {
+        int(bucket): group
+        for bucket, group in dataset.groupby(buckets, sort=True)
+    }
+    early = grouped[0]
+    late = grouped[bucket_count - 1]
+
+    rows: list[dict[str, object]] = []
+
+    for column in model_columns:
+        early_values = early[column]
+        late_values = late[column]
+
+        if column in CATEGORICAL_COLUMNS:
+            early_frame = pd.DataFrame(
+                {"value": early_values.astype("object"), "target": early["target"]}
+            )
+            late_frame = pd.DataFrame(
+                {"value": late_values.astype("object"), "target": late["target"]}
+            )
+            early_rates = early_frame.groupby("value", dropna=False)["target"].mean()
+            late_rates = late_frame.groupby("value", dropna=False)["target"].mean()
+            categories = early_rates.index.union(late_rates.index)
+            early_rates = early_rates.reindex(categories)
+            late_rates = late_rates.reindex(categories)
+            relationship_drift = float(
+                (early_rates - late_rates).abs().max()
+            )
+            metric = "max_category_target_rate_delta"
+        else:
+            early_numeric = pd.to_numeric(early_values, errors="coerce")
+            late_numeric = pd.to_numeric(late_values, errors="coerce")
+            early_mask = early_numeric.notna()
+            late_mask = late_numeric.notna()
+
+            if (
+                early_mask.sum() < 2
+                or late_mask.sum() < 2
+                or early.loc[early_mask, "target"].nunique() < 2
+                or late.loc[late_mask, "target"].nunique() < 2
+            ):
+                relationship_drift = 0.0
+            else:
+                early_auc = roc_auc_score(
+                    early.loc[early_mask, "target"],
+                    early_numeric.loc[early_mask],
+                )
+                late_auc = roc_auc_score(
+                    late.loc[late_mask, "target"],
+                    late_numeric.loc[late_mask],
+                )
+                relationship_drift = abs(float(early_auc) - float(late_auc))
+            metric = "absolute_auc_delta"
+
+        rows.append(
+            {
+                "feature": column,
+                "type": "categorical" if column in CATEGORICAL_COLUMNS else "numeric",
+                "relationship_drift": relationship_drift,
+                "metric": metric,
+            }
+        )
+
+    report = pd.DataFrame(rows).sort_values(
+        "relationship_drift",
+        ascending=False,
+    )
+
+    print()
+    print("Feature -> outcome relationship drift (earliest vs latest bucket):")
+    print(
+        f"  Early period: {early['setup_timestamp'].min()} -> "
+        f"{early['setup_timestamp'].max()}"
+    )
+    print(
+        f"  Late period:  {late['setup_timestamp'].min()} -> "
+        f"{late['setup_timestamp'].max()}"
+    )
+    print(
+        report.head(top_n).to_string(
+            index=False,
+            formatters={"relationship_drift": "{:.4f}".format},
+        )
+    )
+
 def evaluate_chronological_folds(
     dataset: pd.DataFrame,
     fold_count: int = 3,
