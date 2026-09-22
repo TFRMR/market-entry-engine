@@ -188,11 +188,11 @@ def evaluate_chronological_folds(
         X_test_full = prepare_features(test)
         model_columns, _, _ = select_model_features(X_train_full)
         X_train = X_train_full[model_columns]
-        X_test = X_test_full[model_columns]
+        X_test = X_test_full.loc[:, model_columns].copy()
 
         for column in CATEGORICAL_COLUMNS:
             if column in model_columns:
-                X_test[column] = X_test[column].cat.set_categories(
+                X_test.loc[:, column] = X_test[column].cat.set_categories(
                     X_train[column].cat.categories
                 )
 
