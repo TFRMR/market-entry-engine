@@ -139,14 +139,30 @@ STRUCTURAL_FEATURE_COLUMNS = (
 def _audit_sr_point_in_time(frame: pd.DataFrame) -> None:
     """Independently verify S/R lifecycle and completed-D1 point-in-time mapping."""
     violations = 0
+    lifecycle_violations = 0
+    mapping_violations = 0
 
     for prefix in ("local", "d1"):
         for side in ("support", "resistance"):
             level = frame[f"{prefix}_sr_{side}"]
             state = frame[f"{prefix}_sr_{side}_state"]
             event = frame[f"{prefix}_sr_{side}_event"]
-            violations += int((state.notna() & level.isna()).sum())
-            violations += int((event.ne("NONE") & level.isna()).sum())
+
+            # BROKEN/FLIPPED intentionally retain historical lifecycle context
+            # after the currently selected nearest level disappears.
+            invalid_state = (
+                state.notna()
+                & level.isna()
+                & ~state.isin(["BROKEN", "FLIPPED"])
+            )
+            invalid_event = (
+                event.ne("NONE")
+                & level.isna()
+                & ~event.isin(["BROKEN", "FLIPPED"])
+            )
+            count = int(invalid_state.sum() + invalid_event.sum())
+            lifecycle_violations += count
+            violations += count
 
     ts = pd.to_datetime(frame["timestamp"])
     daily = (
@@ -222,6 +238,7 @@ def _audit_sr_point_in_time(frame: pd.DataFrame) -> None:
                 (pd.isna(a) & pd.isna(e))
                 | (pd.notna(a) & pd.notna(e) & (abs(a - e) <= 1e-12))
             )
+            mapping_violations += int(mismatch.sum())
             violations += int(mismatch.sum())
 
         first_date = actual["_date"].min()
@@ -234,6 +251,8 @@ def _audit_sr_point_in_time(frame: pd.DataFrame) -> None:
 
     print("S/R point-in-time + lifecycle:")
     print(f"  Violations: {violations:,}")
+    print(f"  Lifecycle violations: {lifecycle_violations:,}")
+    print(f"  D1 mapping violations: {mapping_violations:,}")
     if violations:
         raise AssertionError("S/R point-in-time/lifecycle audit failed.")
     print("  Validation: PASS")
