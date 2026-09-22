@@ -220,6 +220,21 @@ def main() -> None:
     X_train = X_train_full[model_columns]
     X_test = X_test_full[model_columns]
 
+    historical_binary = historical_audit.loc[
+        historical_audit["label"].isin(["TP_FIRST", "SL_FIRST"])
+    ].copy()
+    historical_binary["target"] = (
+        historical_binary["label"] == "TP_FIRST"
+    ).astype("int8")
+    X_historical = prepare_features(historical_binary)[model_columns]
+
+    for column in CATEGORICAL_COLUMNS:
+        if column in model_columns:
+            X_historical[column] = X_historical[column].cat.set_categories(
+                X_train[column].cat.categories
+            )
+    y_historical = historical_binary["target"]
+
     print()
     print("Dataset:")
     print(f"  Raw candles:          {len(frame):,}")
@@ -265,6 +280,20 @@ def main() -> None:
     print(f"  Baseline log loss: {log_loss(y_test, baseline_probability):.4f}")
     print(f"  Train accuracy:   {accuracy_score(y_train, train_prediction):.4f}")
     print(f"  Test accuracy:    {accuracy_score(y_test, test_prediction):.4f}")
+
+    historical_probability = model.predict_proba(X_historical)[:, 1]
+    historical_base_rate = float(y_historical.mean())
+    historical_baseline_probability = [
+        historical_base_rate
+    ] * len(y_historical)
+
+    print()
+    print("Historical-boundary evaluation (not pristine OOS):")
+    print(f"  Rows:              {len(historical_binary):,}")
+    print(f"  Period:            {historical_binary['setup_timestamp'].min()} -> {historical_binary['setup_timestamp'].max()}")
+    print(f"  ROC-AUC:            {roc_auc_score(y_historical, historical_probability):.4f}")
+    print(f"  Log loss:           {log_loss(y_historical, historical_probability):.4f}")
+    print(f"  Baseline log loss:  {log_loss(y_historical, historical_baseline_probability):.4f}")
 
     print()
     print("Test labels:")
