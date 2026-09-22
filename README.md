@@ -25,20 +25,7 @@ OHLCV Data
 -> Backtesting
 -> Paper / Shadow Trading
 
-The eventual signal format is:
-
-- LONG
-- SHORT
-- NO TRADE
-
-with supporting information such as:
-
-- entry zone
-- stop loss
-- take profit
-- risk/reward
-- model probability
-- market context
+The deterministic engine is intentionally separated from statistical evaluation. Primitive layers describe observable price action, market structure, and market context; they do not emit BUY/SELL signals or probability scores.
 
 ## Project Status
 
@@ -46,44 +33,42 @@ Early development.
 
 ### Current engineering position
 
-The deterministic Market Structure v1 is locked, while Context v1 is being
-locked incrementally before machine learning and entry optimization.
+The deterministic Market Structure v1 and Context v1 feature stack are the current
+research foundation. The feature design has been simplified to price action and
+market structure/context rather than a broad technical-indicator stack.
 
-Completed and locked:
+Current deterministic layers include:
 
-- structural candle classification
-- inside / outside candle handling
-- directional legs
-- pullback candidates and validation
-- valid swing generation
-- HH / HL / LH / LL labels from valid swings
-- BOS from confirmed valid swings
-- swing confirmation-time handling for no-look-ahead processing
-- first BOS structural anchoring
-- StructureCheckpoint and forward continuation
-- internal / external structure scope
-- external-boundary break and structure rebuild
-- deterministic simultaneous-event ordering
-- confirmation-time structure feature contract
-- active vs historical structural context separation
-- active structural context features
-- historical structural distances for context / POI analysis
-- deterministic entry semantics v1
-- deterministic realized-R audit layer
-- deterministic Context v1 trend/regime and range semantics
-- deterministic Context v1 liquidity semantics
-- deterministic FVG context
-- deterministic Order Block structural candidate and historical directional projection
-- deterministic canonical structural S/R and Location v1
+- raw candle price action / displacement geometry
+- directional Market Structure with INTERNAL / EXTERNAL scope
+- valid swings, HH / HL / LH / LL
+- BOS / CHoCH and chronological event sequence
+- active and historical structural context
+- trend / regime and range
+- liquidity and sweeps
+- FVG and historical FVG reference routing
+- structural Order Block candidates and directional historical projection
+- structural S/R and Location
+- pullback state
 
-Current next step:
+Removed from the current primitive feature stack:
 
-- complete deterministic FVG Transition v1 routing and its temporal/spatial reference semantics
-- then continue deterministic context enrichment with displacement / price action
-- then implement pullback state and event sequence
-- audit each layer for as-of correctness and full context leakage before ML feature selection
-- keep Order Block POI ranking separate from the primitive candidate/projection layer
-- evaluate HTF context separately later, with D1 as priority and H4 as supporting/fallback context
+- EMA 5 / 20 / 50 features
+- ATR as a feature family and ATR-dependent primitive definitions
+- standalone momentum-candle classification as the strategy foundation
+- recent-return / recent-movement features
+- standalone volume features
+- legacy rolling support/resistance as the canonical structural definition
+- indicator-derived signal/ranking logic
+
+ATR may still appear in historical/compatibility documentation or in future
+normalization experiments, but it is not the foundation of the current feature
+contract.
+
+The purpose of the deterministic stack is to expose point-in-time facts that can
+later be evaluated empirically for POI research. POI qualification is separate
+from primitive feature construction, and claims about outcome quality must be
+validated with time-series/OOS evaluation.
 
 The project deliberately keeps deterministic structure and feature contracts
 ahead of statistical modeling and entry optimization.
@@ -177,6 +162,11 @@ ahead of statistical modeling and entry optimization.
   - reward_r_after_spread is explicitly a target-distance ratio, not full net P&L.
   - Random-timing placebo is descriptive only.
   - Day-clustered bootstrap is an uncertainty diagnostic, not a guarantee of independence.
+- [x] Deterministic displacement / price action
+- [x] Pullback state
+- [x] Event Sequence
+- [x] Full context leakage audit
+- [x] Feature dataset schema / ownership audit
 - [ ] LightGBM baseline
 - [ ] XGBoost baseline
 - [ ] Out-of-sample evaluation
