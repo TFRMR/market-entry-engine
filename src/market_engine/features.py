@@ -479,86 +479,83 @@ def _add_sr_lifecycle_features(
     result: pd.DataFrame,
     prefix: str,
 ) -> pd.DataFrame:
-    """Track deterministic S/R interaction state from a point-in-time level."""
-    support_col = f"{prefix}_sr_support"
-    resistance_col = f"{prefix}_sr_resistance"
-    if support_col not in result.columns or resistance_col not in result.columns:
-        return result
-
-    high = result["high"].to_numpy(dtype=float)
-    low = result["low"].to_numpy(dtype=float)
-    close = result["close"].to_numpy(dtype=float)
-
-    for side, level_col in (("support", support_col), ("resistance", resistance_col)):
+    """Track deterministic S/R interaction state without losing break events."""
+    for side in ("support", "resistance"):
+        level_col = f"{prefix}_sr_{side}"
+        if level_col not in result.columns:
+            continue
+        high = result["high"].to_numpy(dtype=float)
+        low = result["low"].to_numpy(dtype=float)
+        close = result["close"].to_numpy(dtype=float)
         levels = result[level_col].to_numpy(dtype=float)
-        state = np.empty(len(result), dtype=object)
-        event = np.empty(len(result), dtype=object)
-        state[:] = None
-        event[:] = "NONE"
-
-        previous_level = np.nan
-        current_state = None
+        state = np.full(len(result), None, dtype=object)
+        event = np.full(len(result), "NONE", dtype=object)
+        tracked_level = np.nan
+        tracked_state = None
         broken_level = np.nan
 
         for position, level in enumerate(levels):
+            current_high = high[position]
+            current_low = low[position]
+            current_close = close[position]
+
+            if np.isfinite(broken_level):
+                flipped = (
+                    current_high >= broken_level and current_close < broken_level
+                    if side == "support"
+                    else current_low <= broken_level and current_close > broken_level
+                )
+                if flipped:
+                    tracked_state = "FLIPPED"
+                    event[position] = "FLIPPED"
+                    state[position] = tracked_state
+                    continue
+
+            if np.isfinite(tracked_level):
+                broken = (
+                    current_close < tracked_level
+                    if side == "support"
+                    else current_close > tracked_level
+                )
+                if broken:
+                    broken_level = tracked_level
+                    tracked_state = "BROKEN"
+                    event[position] = "BROKEN"
+                    state[position] = tracked_state
+                    continue
+
             if not np.isfinite(level):
-                state[position] = None
-                event[position] = "NONE"
+                state[position] = tracked_state
                 continue
 
-            if not np.isfinite(previous_level) or level != previous_level:
-                previous_level = level
-                current_state = "CREATED"
+            if not np.isfinite(tracked_level) or level != tracked_level:
+                tracked_level = level
                 broken_level = np.nan
+                tracked_state = "CREATED"
                 event[position] = "CREATED"
-            else:
-                if current_state == "BROKEN":
-                    if side == "support" and close[position] < level <= high[position]:
-                        current_state = "FLIPPED"
-                        event[position] = "FLIPPED"
-                    elif side == "resistance" and low[position] <= level < close[position]:
-                        current_state = "FLIPPED"
-                        event[position] = "FLIPPED"
-                    elif side == "support" and close[position] < level:
-                        event[position] = "BROKEN"
-                    elif side == "resistance" and close[position] > level:
-                        event[position] = "BROKEN"
-                elif current_state in {"CREATED", "TESTED", "SWEPT", "FLIPPED"}:
-                    if side == "support":
-                        touched = low[position] <= level <= high[position]
-                        swept = low[position] < level and close[position] >= level
-                        broken = close[position] < level
-                    else:
-                        touched = low[position] <= level <= high[position]
-                        swept = high[position] > level and close[position] <= level
-                        broken = close[position] > level
+                state[position] = tracked_state
+                continue
 
-                    if broken:
-                        current_state = "BROKEN"
-                        broken_level = level
-                        event[position] = "BROKEN"
-                    elif swept:
-                        current_state = "SWEPT"
-                        event[position] = "SWEPT"
-                    elif touched:
-                        current_state = "TESTED"
-                        event[position] = "TESTED"
-                    else:
-                        event[position] = "NONE"
-
-            state[position] = current_state
+            touched = current_low <= level <= current_high
+            swept = (
+                current_low < level and current_close >= level
+                if side == "support"
+                else current_high > level and current_close <= level
+            )
+            if swept:
+                tracked_state = "SWEPT"
+                event[position] = "SWEPT"
+            elif touched:
+                tracked_state = "TESTED"
+                event[position] = "TESTED"
+            state[position] = tracked_state
 
         result[f"{prefix}_sr_{side}_state"] = pd.Series(
-            state,
-            index=result.index,
-            dtype="object",
+            state, index=result.index, dtype="object"
         )
         result[f"{prefix}_sr_{side}_event"] = pd.Series(
-            event,
-            index=result.index,
-            dtype="object",
+            event, index=result.index, dtype="object"
         )
-
     return result
 
 
