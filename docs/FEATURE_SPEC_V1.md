@@ -11,27 +11,40 @@ Scope: deterministic structure + market context features for historical inferenc
 - Continuous measurements should be preserved where possible; fixed trading thresholds belong to evaluation/risk logic, not feature construction.
 - AI receives facts/context, not a pre-computed heuristic score.
 
-## 2. Structure
+## 2. Current feature architecture
 
-| Feature | Type | Meaning |
-|---|---|---|
-| structure_direction | categorical | Current canonical directional leg |
-| structure_scope | categorical | INTERNAL / EXTERNAL |
-| structure_age_bars | numeric | Bars since current structure context began |
-| active_extreme_type | categorical | HIGH / LOW |
-| active_extreme_price | numeric | Current directional-leg extreme |
-| active_extreme_distance_atr | numeric | Price distance from extreme normalized by ATR |
-| last_valid_swing_type | categorical | HIGH / LOW |
-| last_valid_swing_price | numeric | Last confirmed swing |
-| last_valid_swing_age_bars | numeric | Bars since confirmation |
-| last_swing_label | categorical | HH / HL / LH / LL |
-| distance_to_last_swing_atr | numeric | Current price distance to last valid swing |
-| bos_event | categorical/binary | Whether a valid-swing break occurred at this candle |
-| bos_direction | categorical | UP / DOWN when BOS occurs |
-| choch_event | categorical/binary | Whether a valid-swing break changes the canonical structure direction at this candle |
-| choch_direction | categorical | UP / DOWN when CHoCH occurs |
-| internal_boundary_distance_atr | numeric | Distance to relevant internal boundary |
-| external_boundary_distance_atr | numeric | Distance to relevant external boundary |
+The current feature architecture is:
+
+```
+Price Action
+    ↓
+Market Structure
+    ├─ INTERNAL
+    └─ EXTERNAL
+    ↓
+Event Sequence
+    ↓
+Trend / Range
+    ↓
+Liquidity
+    ↓
+FVG
+    ↓
+Order Block
+    ↓
+S/R + Location
+    ↓
+Pullback State
+    ↓
+POI research / ML evaluation
+```
+
+Removed indicator-oriented primitives include EMA 5/20/50, standalone ATR and
+volatility features, momentum-candle strategy classification, recent-movement
+features, standalone volume features, and ATR-dependent structural fields.
+Historical compatibility references may remain elsewhere in this document but
+are not part of the current primitive contract.
+
 
 ## 3. Trend / regime and range
 
@@ -106,76 +119,23 @@ Quality-gate coverage:
 
 ## 6. Order Block
 
-- ob_present
-- ob_direction
-- ob_size
-- ob_size_atr
-- ob_age_bars
-- ob_distance
-- ob_distance_atr
-- ob_contains_price
-- ob_relative_position
+Current Order Block projection fields per direction are:
 
-OB is a contextual hypothesis, not a deterministic trade signal.
+- `present`
+- `size`
+- `age_bars`
+- `distance`
+- `contains_price`
+- `relative_position`
 
-### Order Block structural contract
+The zone is the wick-to-wick range of the qualifying structural swing candle.
+Candidates are made available only from their confirmed BOS/CHOCH event onward.
 
-- A valid swing is not automatically an Order Block.
-- An Order Block candidate is derived from a confirmed structural swing
-  inside a structural leg that produces a BOS or CHoCH event.
-- Bullish structural events use qualifying LOW swings after the broken HIGH
-  and before the event.
-- Bearish structural events use qualifying HIGH swings after the broken LOW
-  and before the event.
-- Only swings confirmed before the BOS/CHoCH event are eligible.
-- Every qualifying swing is preserved as a candidate; this primitive does not
-  rank or select a single POI.
-- The OB zone is represented by the complete candle range of the candidate
-  swing candle, from wick to wick.
-- `ob_low` is the candidate candle low.
-- `ob_high` is the candidate candle high.
-- `ob_size` is `ob_high - ob_low`.
-- OB, swing, and POI are distinct concepts:
-  `Swing != OB != POI`.
-- POI qualification/ranking such as freshness, mitigation, imbalance/OBIM,
-  structural importance, or higher-timeframe alignment is outside this
-  structural candidate primitive.
+ATR-normalized OB fields are no longer part of the current primitive contract.
 
-### Order Block feature projection contract
-
-The structural Order Block candidate layer is projected into historical
-directional context features without introducing POI ranking.
-
-For each direction, the projection exposes:
-
-- `ob_{direction}_present`: whether a known structural OB candidate exists.
-- `ob_{direction}_size`: wick-to-wick candidate zone width.
-- `ob_{direction}_size_atr`: zone width divided by current `atr_14`.
-- `ob_{direction}_age_bars`: bars elapsed since the BOS/CHoCH event that made
-  the candidate structurally available.
-- `ob_{direction}_distance`: distance from current close to the nearest zone
-  boundary, or `0` when the close is inside the zone.
-- `ob_{direction}_distance_atr`: distance divided by current `atr_14`.
-- `ob_{direction}_contains_price`: `1` when current close is inside the zone,
-  otherwise `0`.
-- `ob_{direction}_relative_position`: `(close - ob_low) / ob_size`.
-
-Historical availability is strict:
-
-- A candidate becomes available on its BOS/CHoCH event candle.
-- A candidate is never projected before its event index.
-- Only candidates whose underlying swing was confirmed before the event are
-  eligible.
-- When multiple candidates exist for one direction, the latest known
-  candidate is used by `(event_index, swing_index)` order. This is temporal
-  routing, not POI quality ranking.
-
-`atr_14` is an optional dependency for the projection. When ATR is absent,
-non-finite, or non-positive, ATR-normalized fields remain `NaN`.
-
-The projection intentionally does not encode freshness, mitigation,
-imbalance/OBIM, structural importance, or higher-timeframe alignment. Those
-remain separate context facts and future POI qualification logic.
+OB is a structural candidate/context object, not a POI quality score or trading
+signal. Freshness, mitigation, imbalance, higher-timeframe alignment, and other
+quality criteria require separate explicit definitions.
 
 ## 4. Liquidity
 
@@ -403,3 +363,22 @@ CHoCH is a deterministic structure-transition event derived from BOS semantics:
 - A CHoCH does not by itself prove a completed reversal; subsequent structure events remain authoritative.
 - If one candle produces both directional BOS events, CHoCH classification uses the pre-candle canonical direction and preserves deterministic event ordering.
 - CHoCH must use the same confirmation-time and no-look-ahead rules as BOS.
+
+
+## Current simplification and POI research boundary
+
+The current implementation intentionally prioritizes **price action + Market
+Structure**. INTERNAL and EXTERNAL structure are first-class context, while
+FVG, liquidity, Order Block, S/R/location, pullback, and event sequence provide
+additional deterministic context.
+
+The purpose is to construct auditable POI candidates and context facts. A
+"high probability" POI is not a primitive feature label; it is an empirical
+research conclusion that must be established from chronological outcomes and
+out-of-sample evaluation.
+
+## Current validation status
+
+The implementation has completed point-in-time chronology, missingness,
+feature-schema, ownership, and deterministic event-stream audits. The next
+stage is LightGBM/XGBoost baseline evaluation and OOS testing.
