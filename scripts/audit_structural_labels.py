@@ -153,6 +153,7 @@ def _audit_sr_point_in_time(frame: pd.DataFrame) -> None:
         frame.assign(_date=ts.dt.floor("D"))
         .groupby("_date", sort=True)
         .agg(
+            timestamp=("timestamp", "first"),
             open=("open", "first"),
             high=("high", "max"),
             low=("low", "min"),
