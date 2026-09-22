@@ -195,7 +195,7 @@ def add_order_block_features(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def add_sr_location_features(frame: pd.DataFrame) -> pd.DataFrame:
-    """Add confirmed structural S/R and deterministic location context."""
+    """Add confirmed structural S/R and point-in-time location context."""
     required = {
         "high",
         "low",
@@ -215,7 +215,7 @@ def add_sr_location_features(frame: pd.DataFrame) -> pd.DataFrame:
     structural = build_structural_sequence(result)
     swings, _ = process_structural_candles(structural)
 
-    swings_by_confirmation = {}
+    swings_by_confirmation: dict[int, list] = {}
     for swing in swings:
         swings_by_confirmation.setdefault(
             swing.confirmation_index,
@@ -227,69 +227,126 @@ def add_sr_location_features(frame: pd.DataFrame) -> pd.DataFrame:
 
     support = np.full(size, np.nan)
     resistance = np.full(size, np.nan)
+    support_age = np.full(size, np.nan)
+    resistance_age = np.full(size, np.nan)
+    support_type = np.full(size, None, dtype=object)
+    resistance_type = np.full(size, None, dtype=object)
+    support_label = np.full(size, None, dtype=object)
+    resistance_label = np.full(size, None, dtype=object)
+    support_scope = np.full(size, None, dtype=object)
+    resistance_scope = np.full(size, None, dtype=object)
     next_structure = np.full(size, np.nan)
 
-    confirmed_highs = []
-    confirmed_lows = []
+    confirmed_highs: list = []
+    confirmed_lows: list = []
 
     for position in range(size):
         for swing in swings_by_confirmation.get(position, []):
             if swing.swing_type is SwingType.HIGH:
-                confirmed_highs.append(float(swing.price))
+                confirmed_highs.append(swing)
             else:
-                confirmed_lows.append(float(swing.price))
+                confirmed_lows.append(swing)
 
         current_close = close[position]
 
         supports = [
-            level
-            for level in confirmed_lows
-            if level <= current_close
+            swing
+            for swing in confirmed_lows
+            if swing.price <= current_close
         ]
         resistances = [
-            level
-            for level in confirmed_highs
-            if level >= current_close
+            swing
+            for swing in confirmed_highs
+            if swing.price >= current_close
         ]
 
         if supports:
-            support[position] = max(supports)
+            selected = max(
+                supports,
+                key=lambda swing: (swing.price, swing.confirmation_index),
+            )
+            support[position] = selected.price
+            support_age[position] = position - selected.confirmation_index
+            support_type[position] = selected.swing_type.value
+            support_label[position] = selected.label
+            support_scope[position] = selected.scope.value
 
         if resistances:
-            resistance[position] = min(resistances)
+            selected = min(
+                resistances,
+                key=lambda swing: (swing.price, -swing.confirmation_index),
+            )
+            resistance[position] = selected.price
+            resistance_age[position] = position - selected.confirmation_index
+            resistance_type[position] = selected.swing_type.value
+            resistance_label[position] = selected.label
+            resistance_scope[position] = selected.scope.value
 
         if direction[position] > 0:
             next_levels = [
-                level
-                for level in confirmed_highs
-                if level > current_close
+                swing.price
+                for swing in confirmed_highs
+                if swing.price > current_close
             ]
             if next_levels:
                 next_structure[position] = min(next_levels)
 
         elif direction[position] < 0:
             next_levels = [
-                level
-                for level in confirmed_lows
-                if level < current_close
+                swing.price
+                for swing in confirmed_lows
+                if swing.price < current_close
             ]
             if next_levels:
                 next_structure[position] = max(next_levels)
 
+    result["local_sr_support"] = support
+    result["local_sr_resistance"] = resistance
+    result["local_sr_support_present"] = np.isfinite(support).astype(int)
+    result["local_sr_resistance_present"] = np.isfinite(resistance).astype(int)
+    result["local_sr_support_age"] = support_age
+    result["local_sr_resistance_age"] = resistance_age
+    result["local_sr_support_swing_type"] = pd.Series(
+        support_type,
+        index=result.index,
+        dtype="object",
+    )
+    result["local_sr_resistance_swing_type"] = pd.Series(
+        resistance_type,
+        index=result.index,
+        dtype="object",
+    )
+    result["local_sr_support_label"] = pd.Series(
+        support_label,
+        index=result.index,
+        dtype="object",
+    )
+    result["local_sr_resistance_label"] = pd.Series(
+        resistance_label,
+        index=result.index,
+        dtype="object",
+    )
+    result["local_sr_support_scope"] = pd.Series(
+        support_scope,
+        index=result.index,
+        dtype="object",
+    )
+    result["local_sr_resistance_scope"] = pd.Series(
+        resistance_scope,
+        index=result.index,
+        dtype="object",
+    )
+
     result["support_level"] = support
     result["resistance_level"] = resistance
-
     result["distance_to_support"] = close - support
     result["distance_to_resistance"] = resistance - close
 
     result["distance_to_next_structure_level"] = np.nan
-
     valid_next = np.isfinite(next_structure)
-    next_distance = np.full(size, np.nan)
-    next_distance[valid_next] = np.abs(
+    result.loc[valid_next, "distance_to_next_structure_level"] = np.abs(
         next_structure[valid_next] - close[valid_next]
     )
-    result["distance_to_next_structure_level"] = next_distance
 
     result["leg_position"] = result.get(
         "range_position",
