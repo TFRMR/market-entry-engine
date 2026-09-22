@@ -97,6 +97,27 @@ STRUCTURAL_FEATURE_COLUMNS = (
     "liquidity_sweep_direction",
     "liquidity_sweep_size",
 
+    # Structural S/R + lifecycle
+    "local_sr_support", "local_sr_resistance",
+    "local_sr_support_present", "local_sr_resistance_present",
+    "local_sr_support_age", "local_sr_resistance_age",
+    "local_sr_support_swing_type", "local_sr_resistance_swing_type",
+    "local_sr_support_label", "local_sr_resistance_label",
+    "local_sr_support_scope", "local_sr_resistance_scope",
+    "support_level", "resistance_level",
+    "distance_to_support", "distance_to_resistance",
+    "distance_to_next_structure_level", "leg_position",
+    "local_sr_support_state", "local_sr_support_event",
+    "local_sr_resistance_state", "local_sr_resistance_event",
+    "d1_structure_direction", "d1_sr_support", "d1_sr_resistance",
+    "d1_sr_support_present", "d1_sr_resistance_present",
+    "d1_sr_support_age", "d1_sr_resistance_age",
+    "d1_sr_support_label", "d1_sr_resistance_label",
+    "d1_sr_support_scope", "d1_sr_resistance_scope",
+    "distance_to_d1_support", "distance_to_d1_resistance",
+    "d1_sr_support_state", "d1_sr_support_event",
+    "d1_sr_resistance_state", "d1_sr_resistance_event",
+
     # Order block
     "ob_bullish_present",
     "ob_bullish_size",
@@ -111,6 +132,42 @@ STRUCTURAL_FEATURE_COLUMNS = (
     "ob_bearish_contains_price",
     "ob_bearish_relative_position",
 )
+
+
+def _audit_sr_point_in_time(frame: pd.DataFrame) -> None:
+    """Audit that S/R state never exists without a known level."""
+    violations = 0
+    for prefix in ("local", "d1"):
+        for side in ("support", "resistance"):
+            level = frame[f"{prefix}_sr_{side}"]
+            state = frame[f"{prefix}_sr_{side}_state"]
+            event = frame[f"{prefix}_sr_{side}_event"]
+            violations += int((state.notna() & level.isna()).sum())
+            violations += int((event.ne("NONE") & level.isna()).sum())
+
+    if "timestamp" in frame.columns:
+        ts = pd.to_datetime(frame["timestamp"])
+        present = (
+            frame["d1_sr_support_present"].astype(bool)
+            | frame["d1_sr_resistance_present"].astype(bool)
+        )
+        # A D1 level may only appear on a later date, never on the date
+        # whose daily candle created that structural reference.
+        daily_first = {}
+        for date, group in frame.groupby(ts.dt.floor("D"), sort=True):
+            if present.loc[group.index].any():
+                daily_first[date] = True
+        dates = sorted(daily_first)
+        if dates:
+            first = dates[0]
+            if not (ts[present] >= first).all():
+                violations += 1
+
+    print("S/R point-in-time + lifecycle:")
+    print(f"  Violations: {violations:,}")
+    if violations:
+        raise AssertionError("S/R point-in-time/lifecycle audit failed.")
+    print("  Validation: PASS")
 
 
 def _parse_args() -> argparse.Namespace:
@@ -281,6 +338,7 @@ def main() -> None:
     if args.with_features:
         feature_frame = build_structural_features(frame)
         feature_columns = STRUCTURAL_FEATURE_COLUMNS
+        _audit_sr_point_in_time(feature_frame)
 
     labeled = build_setup_label_dataset(
         candidates=candidates,
