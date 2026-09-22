@@ -168,6 +168,56 @@ def prepare_features(frame: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
+
+def evaluate_chronological_folds(
+    dataset: pd.DataFrame,
+    fold_count: int = 3,
+) -> None:
+    """Evaluate fixed baseline across chronological expanding folds."""
+
+    print()
+    print("Chronological fold evaluation:")
+    total = len(dataset)
+    for fold in range(1, fold_count + 1):
+        train_end = int(total * (0.50 + 0.10 * (fold - 1)))
+        test_end = int(total * (0.70 + 0.10 * (fold - 1)))
+        train = dataset.iloc[:train_end]
+        test = dataset.iloc[train_end:test_end]
+
+        X_train_full = prepare_features(train)
+        X_test_full = prepare_features(test)
+        model_columns, _, _ = select_model_features(X_train_full)
+        X_train = X_train_full[model_columns]
+        X_test = X_test_full[model_columns]
+
+        for column in CATEGORICAL_COLUMNS:
+            if column in model_columns:
+                X_test[column] = X_test[column].cat.set_categories(
+                    X_train[column].cat.categories
+                )
+
+        model = make_model()
+        model.fit(
+            X_train,
+            train["target"],
+            categorical_feature=[
+                column for column in CATEGORICAL_COLUMNS
+                if column in model_columns
+            ],
+        )
+        probability = model.predict_proba(X_test)[:, 1]
+        base_rate = float(train["target"].mean())
+        baseline_probability = [base_rate] * len(test)
+
+        print(
+            f"  Fold {fold}: "
+            f"train={len(train):,} test={len(test):,} "
+            f"test_period={test['setup_timestamp'].min()} -> {test['setup_timestamp'].max()} "
+            f"ROC-AUC={roc_auc_score(test['target'], probability):.4f} "
+            f"log_loss={log_loss(test['target'], probability):.4f} "
+            f"baseline={log_loss(test['target'], baseline_probability):.4f}"
+        )
+
 def main() -> None:
     print("=== Canonical Structural LightGBM Baseline ===")
 
@@ -294,6 +344,8 @@ def main() -> None:
     print(f"  ROC-AUC:            {roc_auc_score(y_historical, historical_probability):.4f}")
     print(f"  Log loss:           {log_loss(y_historical, historical_probability):.4f}")
     print(f"  Baseline log loss:  {log_loss(y_historical, historical_baseline_probability):.4f}")
+
+    evaluate_chronological_folds(dataset)
 
     print()
     print("Test labels:")
