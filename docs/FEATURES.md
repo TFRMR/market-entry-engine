@@ -441,32 +441,6 @@ FVG Transition v1 currently provides:
 
 It does not determine rejection, acceptance, break, previous/next reach, transition outcome, probability, or BUY/SELL signals.
 
-# 8.1 FVG Transition Reference Routing
-
-FVG Transition v1 routes the current price through historical FVG references without producing a trade signal or transition outcome.
-
-## Temporal availability
-
-Only references satisfying `creation_index <= current_index` are available.
-
-## Origin
-
-Origin is the FVG containing current close: `lower <= close <= upper`. Exactly one containing FVG is required. Zero or multiple containing FVGs produce `origin = None`. Creation order is not used to resolve overlap.
-
-## Target
-
-For `UP`, candidates satisfy `lower > close`; select the smallest `lower`. For `DOWN`, candidates satisfy `upper < close`; select the largest `upper`.
-
-## Next-after-target
-
-For `UP`, candidates satisfy `candidate.lower > target.upper`; select the smallest `lower`. For `DOWN`, candidates satisfy `candidate.upper < target.lower`; select the largest `upper`.
-
-Overlapping FVGs are not forced into a spatial ordering.
-
-## Scope
-
-This layer provides origin, target, next-after-target, temporal availability, directional spatial routing, and explicit overlap ambiguity. It does not determine rejection, acceptance, break, reach, transition outcome, probability, or BUY/SELL signals.
-
 # 9. Distance to Structure
 
 Legacy distance features:
