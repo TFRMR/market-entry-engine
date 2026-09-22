@@ -684,3 +684,80 @@ def test_fvg_requires_ohlc_context() -> None:
 
     with pytest.raises(ValueError, match="Missing FVG context columns"):
         add_fvg_features(frame)
+
+
+def test_displacement_features_calculate_normalized_candle_geometry() -> None:
+    frame = pd.DataFrame(
+        {
+            "timestamp": pd.date_range(
+                "2026-01-01 10:00:00",
+                periods=14,
+                freq="h",
+            ),
+            "open": [100.0] * 13 + [100.0],
+            "high": [105.0] * 13 + [110.0],
+            "low": [100.0] * 13 + [90.0],
+            "close": [105.0] * 13 + [108.0],
+            "tick_volume": [100] * 14,
+            "real_volume": [0] * 14,
+            "spread": [160] * 14,
+        }
+    )
+
+    result = add_momentum_features(frame)
+    result = add_volatility_features(result)
+
+    assert result.loc[13, "candle_range"] == 20.0
+    assert result.loc[13, "candle_body"] == 8.0
+
+    expected_atr = result.loc[13, "atr_14"]
+
+    assert result.loc[13, "range_atr"] == (
+        result.loc[13, "candle_range"] / expected_atr
+    )
+    assert result.loc[13, "body_atr"] == (
+        result.loc[13, "candle_body"] / expected_atr
+    )
+
+    assert result.loc[13, "upper_wick_to_body"] == 0.25
+    assert result.loc[13, "lower_wick_to_body"] == 1.25
+
+    assert result.loc[13, "close_position_in_range"] == 0.9
+
+
+def test_displacement_features_do_not_create_infinite_wick_body_ratios() -> None:
+    frame = pd.DataFrame(
+        {
+            "timestamp": pd.to_datetime(["2026-01-01 23:00:00"]),
+            "open": [100.0],
+            "high": [110.0],
+            "low": [90.0],
+            "close": [100.0],
+            "tick_volume": [100],
+            "real_volume": [0],
+            "spread": [160],
+            "atr_14": [5.0],
+        }
+    )
+
+    result = add_momentum_features(frame)
+    result = add_volatility_features(result)
+
+    assert pd.isna(result.loc[0, "upper_wick_to_body"])
+    assert pd.isna(result.loc[0, "lower_wick_to_body"])
+
+
+def test_displacement_features_are_present_in_full_feature_build() -> None:
+    frame = make_sample_frame(rows=60)
+
+    result = build_features(frame)
+
+    expected_columns = {
+        "range_atr",
+        "body_atr",
+        "upper_wick_to_body",
+        "lower_wick_to_body",
+        "close_position_in_range",
+    }
+
+    assert expected_columns.issubset(result.columns)

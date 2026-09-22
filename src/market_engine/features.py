@@ -60,6 +60,20 @@ def add_momentum_features(frame: pd.DataFrame) -> pd.DataFrame:
         / candle_range[valid_range]
     )
 
+    result["close_position_in_range"] = result["close_position"]
+
+    result["upper_wick_to_body"] = np.nan
+    result["lower_wick_to_body"] = np.nan
+
+    valid_body = candle_body.ne(0)
+
+    result.loc[valid_body, "upper_wick_to_body"] = (
+        upper_wick[valid_body] / candle_body[valid_body]
+    )
+    result.loc[valid_body, "lower_wick_to_body"] = (
+        lower_wick[valid_body] / candle_body[valid_body]
+    )
+
     result["is_momentum_candle"] = result["body_ratio"] >= 0.80
     result["is_bullish"] = result["close"] > result["open"]
     result["is_bearish"] = result["close"] < result["open"]
@@ -101,6 +115,14 @@ def add_volatility_features(
 
     result.loc[valid_atr, "range_to_atr"] = (
         result.loc[valid_atr, "candle_range"]
+        / result.loc[valid_atr, "atr_14"]
+    )
+
+    result["range_atr"] = result["range_to_atr"]
+
+    result["body_atr"] = np.nan
+    result.loc[valid_atr, "body_atr"] = (
+        result.loc[valid_atr, "candle_body"]
         / result.loc[valid_atr, "atr_14"]
     )
 
