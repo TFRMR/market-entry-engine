@@ -564,6 +564,7 @@ def main() -> None:
 
     print_temporal_distribution(dataset)
     print_feature_drift(dataset, model_columns)
+    print_feature_outcome_drift(dataset, model_columns)
 
     evaluate_chronological_folds(dataset)
 
