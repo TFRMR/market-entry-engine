@@ -2,891 +2,261 @@
 
 ## 1. Purpose
 
-The Market Entry Engine is designed as a **momentum-candle specialist**.
+The current feature stack is deliberately centered on **price action and Market
+Structure**. Technical indicators are not used as the foundation of the
+primitive feature contract.
 
-The primary market event of interest is a candle whose body represents at least 80% of its total high-low range.
+The deterministic engine describes what is observable and knowable at each
+candle. Statistical modeling is responsible for testing which combinations of
+those facts are associated with outcomes.
 
-The purpose of feature engineering is therefore not to build a large collection of technical indicators.
+The intended research flow is:
 
-Instead, the feature pipeline should describe the context surrounding a momentum candle and allow later analysis to determine which contexts are associated with favorable outcomes.
-
-The project will use empirical analysis to determine which patterns have useful predictive value.
-
----
-
-## 2. Core Hypothesis
-
-The initial hypothesis is:
-
-> A candle with a body-to-range ratio of at least 80% may contain useful information about short-term directional momentum.
-
-The basic measurement is:
-
-```text
-range = high - low
-body  = abs(close - open)
-
-body_ratio = body / range
+```
+OHLCV
+  ↓
+Price Action
+  ↓
+Market Structure
+  ├─ INTERNAL
+  └─ EXTERNAL
+  ↓
+Structure Events / Event Sequence
+  ↓
+Market Context
+  ├─ Trend / Range
+  ├─ Liquidity
+  ├─ FVG
+  ├─ Order Block
+  ├─ S/R + Location
+  └─ Pullback
+  ↓
+POI candidate/context research
+  ↓
+ML / OOS evaluation
 ```
 
-A candle qualifies as a momentum-candle candidate when:
+The primitive layers do not assign probability, rank setups, or emit BUY/SELL
+signals.
 
-```text
-body_ratio >= 0.80
-```
+## 2. Removed indicator-oriented feature stack
 
-Direction:
+The following were removed from the current primitive implementation:
 
-```text
-LONG  candidate: close > open
-SHORT candidate: close < open
-```
+- EMA 5 / 20 / 50 context
+- standalone ATR / volatility feature family
+- momentum-candle strategy classification
+- recent movement / return features
+- standalone volume features
+- ATR-dependent Order Block / FVG / S/R primitive fields
+- indicator-derived signal or ranking logic
 
-If `high == low`, the candle does not qualify as a momentum-candle candidate.
+This cleanup makes the current feature contract primarily raw price-action,
+structural, and contextual.
 
-The 80% threshold is part of the initial strategy hypothesis. It should not be optimized against the available dataset before an out-of-sample validation methodology has been established.
+ATR can still be used later as an explicitly scoped normalization experiment,
+but it is not required by the current primitive definitions.
 
----
+## 3. Price Action / Displacement
 
-## 3. Strategy Philosophy
+Current deterministic candle-geometry features:
 
-The system should follow this structure:
+- `candle_range`
+- `candle_body`
+- `body_ratio`
+- `upper_wick_ratio`
+- `lower_wick_ratio`
+- `close_position`
+- `close_position_in_range`
+- `upper_wick_to_body`
+- `lower_wick_to_body`
 
-```text
-Validated OHLCV
-       |
-       v
-Momentum Candle Detection
-body / range >= 0.80
-       |
-       v
-Context Analysis
-       |
-       +-- EMA 5 / 20 / 50
-       |
-       +-- Support / Resistance
-       |
-       +-- Breakout / Structure
-       |
-       +-- Candle Size / ATR
-       |
-       +-- Recent Price Behavior
-       |
-       v
-Outcome Analysis
-       |
-       v
-Probability / Model
-       |
-       +-- LONG
-       +-- SHORT
-       +-- NO TRADE
-```
+These describe candle geometry only. No fixed momentum threshold is part of
+the current primitive contract.
 
-The momentum candle is the **event trigger**.
+## 4. Market Structure
 
-The remaining features describe the environment in which that event occurs.
+Market Structure is the primary directional/context foundation.
 
----
+It contains:
 
-# 4. Momentum-Candle Features
+- directional legs
+- valid swing HIGH / LOW confirmation
+- HH / HL / LH / LL
+- BOS
+- CHOCH
+- INTERNAL / EXTERNAL scope
+- active vs historical structure
+- confirmation-time availability
 
-## 4.1 body_ratio
+A structural fact becomes available only when it is knowable. A future-confirmed
+swing, BOS, or other structural event must never be projected backward.
 
-```text
-body_ratio = abs(close - open) / (high - low)
-```
+## 5. Structure Events and Event Sequence
 
-This is the primary feature.
+Sparse event features expose BOS, CHOCH, swing-validation, HH/HL/LH/LL and
+INTERNAL/EXTERNAL event facts.
 
-The initial trigger is:
+Event Sequence projects chronological event history into point-in-time fields,
+including:
 
-```text
-body_ratio >= 0.80
-```
+- event count
+- last / previous event index, age, type, direction, and scope
+- events since last BOS
+- events since last swing
+- bars since last BOS
+- bars since last swing
 
----
+Event history is descriptive. It does not infer a signal or score.
 
-## 4.2 candle_direction
+## 6. Trend and Range
 
-A categorical/binary representation of candle direction:
+Trend / regime and range features provide structural context around the active
+market state:
 
-```text
-bullish = close > open
-bearish = close < open
-```
+- trend regime
+- trend transition
+- directional transition
+- range high / low / width
+- range position
+- range position zone
+- range state
 
-Doji-like candles where:
+These are deterministic context fields, not trading rules.
 
-```text
-close == open
-```
+## 7. Liquidity
 
-are not considered directional momentum candidates.
+Liquidity is derived from confirmed structural highs/lows.
 
----
+Current fields include:
 
-## 4.3 candle_body
+- liquidity high / low
+- presence flags
+- distance to liquidity
+- high / low sweep
+- sweep state
+- sweep direction
+- sweep size
 
-```text
-candle_body = abs(close - open)
-```
+A clean structural break remains distinct from a liquidity sweep.
 
-This represents the absolute size of the candle body.
+## 8. Fair Value Gap
 
----
+FVG context exposes the latest known historical FVG and its raw spatial
+properties.
 
-## 4.4 candle_range
+The separate historical FVG reference layer preserves every valid FVG with
+creation-time availability. FVG Transition v1 routes spatial references such
+as origin, target, and next-after-target without asserting transition outcome.
 
-```text
-candle_range = high - low
-```
+FVG is contextual information, not a deterministic signal.
 
-This represents the complete candle movement.
+## 9. Order Block
 
----
+An Order Block is a structural candidate, not automatically a POI.
 
-## 4.5 upper_wick_ratio
+Current projection fields for each direction are:
 
-```text
-upper_wick = high - max(open, close)
+- `present`
+- `size`
+- `age_bars`
+- `distance`
+- `contains_price`
+- `relative_position`
 
-upper_wick_ratio =
-    upper_wick / candle_range
-```
+The candidate is derived from confirmed structural swings associated with BOS
+or CHOCH events. The zone is wick-to-wick.
 
----
+The primitive layer does not rank candidates by freshness, mitigation,
+imbalance, higher-timeframe alignment, or other heuristic quality criteria.
 
-## 4.6 lower_wick_ratio
+## 10. S/R and Location
 
-```text
-lower_wick = min(open, close) - low
+Canonical S/R uses confirmed structural swings:
 
-lower_wick_ratio =
-    lower_wick / candle_range
-```
+- confirmed LOW → support
+- confirmed HIGH → resistance
 
----
+Current fields include:
 
-## 4.7 close_position
+- `support_level`
+- `resistance_level`
+- `distance_to_support`
+- `distance_to_resistance`
+- `distance_to_next_structure_level`
+- `leg_position`
 
-```text
-close_position =
-    (close - low) / candle_range
-```
+Location remains structural and point-in-time safe.
 
-This describes where the candle closes inside its total range.
+## 11. Pullback State
 
-Values near 1 indicate a close near the high.
+Pullback has a project-specific structural meaning:
 
-Values near 0 indicate a close near the low.
+> A candidate/reference state that appears while a directional leg is active,
+> before a reversal can validate the active extreme as a swing.
 
----
+A pullback candidate may continue to exist without producing a valid swing.
 
-## 4.8 close_position_in_range
+Current fields include:
 
-`close_position_in_range` uses the same deterministic candle-range position as `close_position`:
+- `pullback_active`
+- `pullback_direction`
+- `pullback_price`
+- `pullback_start_index`
+- `pullback_extreme_index`
+- `pullback_bars`
+- `pullback_depth`
 
-```text
-close_position_in_range =
-    (close - low) / candle_range
-```
+## 12. POI Research Boundary
 
-It is an explicit displacement/price-action field name for the feature specification. The existing `close_position` field remains available for compatibility.
+The deterministic stack is intended to provide the facts needed to study POI
+quality empirically.
 
----
+A POI is not defined merely because an Order Block, FVG, liquidity level, or
+structural level exists. Candidate qualification may later combine structural
+scope, directional context, location, event sequence, displacement, pullback
+state, and other explicitly defined facts.
 
-## 4.9 upper_wick_to_body
+Any claim that a POI is "high probability" must come from measured outcomes
+under a time-series/OOS evaluation protocol. The primitive feature layer must
+not encode that conclusion in advance.
 
-```text
-upper_wick_to_body =
-    upper_wick / candle_body
-```
+## 13. No-look-ahead contract
 
-where:
+At candle t, features must not use:
 
-```text
-upper_wick = high - max(open, close)
-candle_body = abs(close - open)
-```
+- a swing whose confirmation occurs after t
+- a BOS / CHOCH that occurs after t
+- future FVG / OB / liquidity references
+- future target or exit information
+- future candle information not explicitly permitted by the feature definition
 
-If the candle body is zero, the ratio is undefined (`NaN`) rather than infinite.
+Feature values are point-in-time facts and may be carried forward only after
+their source state becomes available.
 
----
+## 14. Feature ownership
 
-## 4.10 lower_wick_to_body
+Each current feature column has one producing builder. The ownership audit found
+no cross-builder output collisions.
 
-```text
-lower_wick_to_body =
-    lower_wick / candle_body
-```
+Event Sequence owns `structure_bars_since_last_bos`; Active Structure owns
+direction, structural distances, historical distances, and bars since the last
+confirmed swing.
 
-where:
+Semantic aliases such as `structure_last_valid_high` and `range_high` are
+retained until their public contract is deliberately consolidated.
 
-```text
-lower_wick = min(open, close) - low
-candle_body = abs(close - open)
-```
+## 15. Validation status
 
-If the candle body is zero, the ratio is undefined (`NaN`) rather than infinite.
+The current deterministic stack has passed:
 
----
+- structure chronology audit
+- feature source chronology audit
+- missingness semantics audit
+- feature dataset schema audit
+- feature ownership audit
+- deterministic event-stream / double-BOS audit
+- full automated test suite
 
-## 4.11 Displacement normalized by ATR
-
-The existing `range_to_atr` measurement is also exposed as the explicit displacement field `range_atr`:
-
-```text
-range_atr = candle_range / ATR14
-```
-
-Body displacement is normalized similarly:
-
-```text
-body_atr = candle_body / ATR14
-```
-
-Both fields use ATR calculated by the existing volatility feature layer. If ATR is unavailable or non-positive, the normalized value is undefined.
-
-These measurements describe candle geometry and volatility expansion. They do not define a trading signal or fixed threshold.
-
----
-
-# 5. Candle Size Relative to Volatility
-
-A momentum candle should not be evaluated only by its body percentage.
-
-A 10-point candle and a 100-point candle can both have a body ratio of 90%.
-
-Therefore the initial analysis should also measure candle size relative to recent volatility.
-
-## 5.1 ATR
-
-The first volatility reference is ATR over 14 candles.
-
-True Range:
-
-```text
-TR[t] = max(
-    high[t] - low[t],
-    abs(high[t] - close[t-1]),
-    abs(low[t] - close[t-1])
-)
-```
-
-Initial ATR:
-
-```text
-ATR14 = rolling_mean(TR, 14)
-```
-
----
-
-## 5.2 range_to_atr
-
-```text
-range_to_atr =
-    candle_range / ATR14
-```
-
-This allows the analysis to distinguish relatively small momentum candles from volatility-expansion candles.
-
-No specific threshold is assumed yet.
-
-Possible categories can be evaluated later from the data.
-
----
-
-# 6. EMA Context
-
-The initial trend/context framework uses:
-
-```text
-EMA5
-EMA20
-EMA50
-```
-
-The purpose is not to generate an independent trading signal.
-
-The purpose is to describe the trend context surrounding the momentum candle.
-
----
-
-## 6.1 Price relative to EMA
-
-Candidate features:
-
-```text
-close_vs_ema5
-close_vs_ema20
-close_vs_ema50
-```
-
-Defined as:
-
-```text
-close_vs_emaN = close / emaN - 1
-```
-
----
-
-## 6.2 EMA relationship
-
-Candidate features:
-
-```text
-ema5_vs_ema20
-ema20_vs_ema50
-```
-
-Defined as:
-
-```text
-ema5_vs_ema20 = ema5 / ema20 - 1
-ema20_vs_ema50 = ema20 / ema50 - 1
-```
-
----
-
-## 6.3 EMA alignment
-
-For analysis, we should identify structural states such as:
-
-### Bullish alignment
-
-```text
-EMA5 > EMA20 > EMA50
-```
-
-### Bearish alignment
-
-```text
-EMA5 < EMA20 < EMA50
-```
-
-### Mixed alignment
-
-All other configurations.
-
-These states are descriptive features, not predetermined entry rules.
-
-The data must determine whether EMA alignment actually changes the outcome of momentum candles.
-
----
-
-# 7. Support and Resistance Context
-
-Support/resistance is included as a **research context feature group**, not as a predefined trading signal.
-
-The initial objective is to determine whether the location of a momentum candle relative to recent price structure affects continuation probability.
-
-The canonical v1 S/R definition uses confirmed structural swings.
-
-A swing confirmed on candle `t` is available to the location layer on candle `t`. This confirmation-time boundary is intentionally different from the stricter post-confirmation boundary used when structural BOS consumes swings. `HIGH` swings are resistance candidates and `LOW` swings are support candidates. Only swings with `confirmation_index <= current candle index` are available. Support is the nearest confirmed `LOW <= close`; resistance is the nearest confirmed `HIGH >= close`. If no qualifying level exists, the value is `NaN`.
-
-
-Legacy rolling references remain available for research and ablation:
-
-```text
-previous_high_20
-previous_low_20
-previous_high_50
-previous_low_50
-```
-
-The implementation must avoid using the current candle's high/low when calculating a **pre-existing** resistance/support level.
-
-For example, a previous-high reference should be based on candles before the momentum candle:
-
-```text
-previous_high_20 =
-    highest high over the previous 20 candles
-```
-
-not:
-
-```text
-highest high including the current candle
-```
-
-This distinction is important for avoiding look-ahead contamination in structure features.
-
-Canonical location fields:
-
-```text
-support_level
-resistance_level
-distance_to_support
-distance_to_resistance
-distance_to_support_atr
-distance_to_resistance_atr
-distance_to_next_structure_level
-distance_to_next_structure_level_atr
-leg_position
-```
-
-ATR only normalizes structural distance; it does not define S/R. In `UP`, next structure is the nearest confirmed `HIGH` strictly above close. In `DOWN`, it is the nearest confirmed `LOW` strictly below close. Nearest FVG, order block, and liquidity location features remain deferred.
-
-# 8. FVG Reference Layer
-
-FVG transition analysis requires all historical FVG references, not only the latest FVG exposed by the existing feature context.
-
-`FVGReference` is an immutable historical object containing:
-
-```text
-creation_index
-direction
-lower
-upper
-size
-creation_timestamp
-```
-
-The reference is created on candle `t` using only candles `t-2` and `t`:
-
-```text
-bullish: low[t] > high[t-2]
-bearish: high[t] < low[t-2]
-```
-
-Both comparisons are strict, so equal boundaries do not create a gap.
-
-The reference becomes available on its creation candle. The builder preserves all valid historical FVGs in chronological creation order.
-
-This layer is deliberately separate from `add_fvg_features()`, whose existing contract is to expose only the latest historical FVG context.
-
-`FVGReference` does not contain target, previous/next, interaction, rejection, or transition-outcome fields. Those concepts belong to the later FVG Transition layer and require their own temporal definitions.
-
----
-
-# 8.1 FVG Transition Reference Routing
-
-The FVG Transition v1 routing layer maps the current price to spatial FVG references without producing a trade signal or transition outcome.
-
-## Temporal availability
-
-Only FVG references satisfying `creation_index <= current_index` are available at the current candle.
-
-## Origin
-
-The origin is the FVG containing the current close:
-
-`lower <= close <= upper`
-
-Exactly one containing FVG is required.
-
-- zero containing FVGs -> `origin = None`
-- multiple containing FVGs -> `origin = None` because the spatial relationship is ambiguous
-
-Creation order is not used to resolve overlapping origin candidates.
-
-## Target
-
-For `UP`, target candidates satisfy `lower > close`. The candidate with the smallest `lower` is selected.
-
-For `DOWN`, target candidates satisfy `upper < close`. The candidate with the largest `upper` is selected.
-
-Target routing therefore follows the nearest fully separated FVG in the direction of travel.
-
-## Next-after-target
-
-For `UP`, candidates must satisfy `candidate.lower > target.upper`. The candidate with the smallest `lower` is selected.
-
-For `DOWN`, candidates must satisfy `candidate.upper < target.lower`. The candidate with the largest `upper` is selected.
-
-Overlapping FVGs are not forced into a spatial ordering.
-
-## Scope
-
-FVG Transition v1 currently provides:
-
-- origin reference
-- target reference
-- next-after-target reference
-- temporal availability
-- directional spatial routing
-- explicit overlap ambiguity
-
-It does not determine rejection, acceptance, break, previous/next reach, transition outcome, probability, or BUY/SELL signals.
-
-# 9. Distance to Structure
-
-Legacy distance features:
-
-```text
-distance_to_previous_high_20
-distance_to_previous_low_20
-distance_to_previous_high_50
-distance_to_previous_low_50
-```
-
-A normalized representation may use current price:
-
-```text
-distance_to_high =
-    (previous_high - close) / close
-
-distance_to_low =
-    (close - previous_low) / close
-```
-
-The exact representation will be frozen when the feature implementation is written.
-
-The purpose is to answer questions such as:
-
-* Does momentum continuation behave differently near a recent high?
-* Does a bullish momentum candle behave differently after breaking a recent high?
-* Does a bearish momentum candle behave differently after breaking a recent low?
-* Are momentum candles in the middle of a range less informative?
-
-These are hypotheses to test, not assumptions.
-
----
-
-# 10. Breakout Context
-
-A momentum candle may occur:
-
-1. inside an existing range;
-2. near a structural boundary;
-3. through a previous high;
-4. through a previous low.
-
-Therefore the initial feature analysis should include breakout state.
-
-Examples:
-
-```text
-break_previous_high_20
-break_previous_low_20
-
-break_previous_high_50
-break_previous_low_50
-```
-
-A bullish breakout candidate could be represented by:
-
-```text
-close > previous_high_20
-```
-
-A bearish breakout candidate:
-
-```text
-close < previous_low_20
-```
-
-The analysis should distinguish breakout momentum from momentum occurring without a structural break.
-
----
-
-# 11. Recent Price Context
-
-The system should know what happened immediately before the momentum candle.
-
-Initial candidates:
-
-```text
-return_3
-return_6
-return_12
-```
-
-where:
-
-```text
-return_N = close[t] / close[t-N] - 1
-```
-
-These features allow us to investigate questions such as:
-
-* Does momentum work better after consolidation?
-* Does momentum work better when price was already moving in the same direction?
-* Does an extremely extended move reduce continuation probability?
-
-Again, these relationships should be discovered empirically.
-
----
-
-# 12. Volume Context
-
-The current XAUUSDc dataset provides meaningful tick volume but zero-valued real volume.
-
-Therefore the initial volume analysis uses:
-
-```text
-tick_volume
-```
-
-Potential features:
-
-```text
-volume_ratio_20
-volume_change_1
-```
-
-where:
-
-```text
-volume_ratio_20 =
-    tick_volume / rolling_mean(tick_volume, 20)
-```
-
-and:
-
-```text
-volume_change_1 =
-    tick_volume[t] / tick_volume[t-1] - 1
-```
-
-Volume should initially be treated as contextual information rather than a mandatory entry filter.
-
----
-
-# 13. Research Questions
-
-The first feature-analysis stage should answer empirical questions rather than optimize a trading rule.
-
-### Momentum quality
-
-* How often does `body_ratio >= 0.80` occur?
-* What percentage are bullish?
-* What percentage are bearish?
-* What is the distribution of candle size relative to ATR?
-
-### Directional continuation
-
-After a momentum candle:
-
-* What happens after 1 candle?
-* What happens after 3 candles?
-* What happens after 5 candles?
-* What happens after 10 candles?
-
-### EMA context
-
-Compare momentum-candle outcomes across:
-
-```text
-bullish alignment
-bearish alignment
-mixed alignment
-```
-
-and relative price position to EMA5/20/50.
-
-### Structural context
-
-Compare:
-
-```text
-breakout
-near resistance/support
-inside range
-```
-
-### Volatility context
-
-Compare different ranges of:
-
-```text
-range_to_atr
-```
-
-without assuming the optimal threshold beforehand.
-
-### Volume context
-
-Compare outcomes under different tick-volume conditions.
-
----
-
-# 14. Outcome Must Be Separate From Features
-
-Feature engineering must not encode the future outcome.
-
-For example:
-
-```text
-feature at t
-```
-
-may use:
-
-```text
-OHLCV <= t
-```
-
-but the outcome may use:
-
-```text
-future candles t+1 ... t+N
-```
-
-The future information belongs exclusively to the labeling/outcome-analysis stage.
-
-This separation is essential for avoiding look-ahead bias.
-
----
-
-# 15. NO TRADE
-
-The system explicitly supports:
-
-```text
-LONG
-SHORT
-NO TRADE
-```
-
-A momentum candle does not automatically become a trade.
-
-The purpose of contextual analysis and later modeling is to determine whether a particular momentum event has sufficiently favorable characteristics.
-
-Low-quality candidates should remain:
-
-```text
-NO TRADE
-```
-
-rather than being forced into LONG or SHORT.
-
----
-
-# 16. Initial Feature Set
-
-The first implementation should remain compact.
-
-### Momentum
-
-```text
-body_ratio
-candle_body
-candle_range
-upper_wick_ratio
-lower_wick_ratio
-close_position
-close_position_in_range
-upper_wick_to_body
-lower_wick_to_body
-```
-
-### Volatility
-
-```text
-atr_14
-range_to_atr
-range_atr
-body_atr
-```
-
-### EMA
-
-```text
-close_vs_ema5
-close_vs_ema20
-close_vs_ema50
-
-ema5_vs_ema20
-ema20_vs_ema50
-```
-
-### Structure
-
-```text
-distance_to_previous_high_20
-distance_to_previous_low_20
-distance_to_previous_high_50
-distance_to_previous_low_50
-
-break_previous_high_20
-break_previous_low_20
-break_previous_high_50
-break_previous_low_50
-```
-
-### Recent movement
-
-```text
-return_3
-return_6
-return_12
-```
-
-### Volume
-
-```text
-volume_ratio_20
-volume_change_1
-```
-
-This gives us a relatively small research feature set.
-
-Not all of these features are guaranteed to survive into the final model.
-
----
-
-# 17. Feature Selection Principle
-
-A feature is retained because it provides useful information demonstrated through proper time-series validation.
-
-A feature should not be retained merely because:
-
-* it is a popular indicator;
-* it improves in-sample performance;
-* it sounds technically sophisticated;
-* it increases model complexity.
-
-The project prioritizes:
-
-```text
-simple hypothesis
-        ↓
-clean measurement
-        ↓
-empirical analysis
-        ↓
-out-of-sample validation
-        ↓
-feature retention
-```
-
----
-
-# 18. Future Expansion
-
-Only after the initial feature set has been evaluated should additional concepts be considered.
-
-Potential future research areas:
-
-* consolidation/compression before momentum;
-* consecutive directional candles;
-* momentum candle after pullback;
-* distance from moving averages;
-* swing structure;
-* higher-timeframe structure;
-* session/time-of-day context;
-* spread conditions;
-* volatility regimes;
-* retest behavior after breakout.
-
-These are research candidates, not current strategy rules.
-
----
-
-# 19. Design Principle
-
-The project is intentionally specialized.
-
-It does not attempt to predict every market movement.
-
-The research target is:
-
-> **Identify high-quality momentum-candle events and determine the market contexts in which their subsequent movement has favorable probability characteristics.**
-
-The 80% body-to-range condition is the initial event definition.
-
-EMA 5/20/50, support/resistance, breakout state, volatility, recent movement, and volume are contextual variables whose usefulness must be demonstrated by data.
-
-No feature should be considered predictive merely because it appears logically plausible.
+The next stage is empirical LightGBM / XGBoost baseline evaluation with
+chronological OOS validation.
