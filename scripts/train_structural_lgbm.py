@@ -169,6 +169,28 @@ def prepare_features(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 
+def print_temporal_distribution(dataset: pd.DataFrame, bucket_count: int = 4) -> None:
+    """Describe outcome distribution across chronological buckets."""
+
+    print()
+    print("Temporal outcome distribution:")
+    buckets = pd.qcut(
+        dataset["setup_timestamp"].rank(method="first"),
+        q=bucket_count,
+        labels=False,
+    )
+    for bucket, group in dataset.groupby(buckets, sort=True):
+        tp_rate = float(group["target"].mean())
+        median_rr = float(group["reward_risk"].median())
+        print(
+            f"  Bucket {int(bucket) + 1}: "
+            f"rows={len(group):,} "
+            f"period={group['setup_timestamp'].min()} -> {group['setup_timestamp'].max()} "
+            f"TP_FIRST={tp_rate:.4f} "
+            f"median_RR={median_rr:.4f}"
+        )
+
+
 def evaluate_chronological_folds(
     dataset: pd.DataFrame,
     fold_count: int = 3,
@@ -344,6 +366,8 @@ def main() -> None:
     print(f"  ROC-AUC:            {roc_auc_score(y_historical, historical_probability):.4f}")
     print(f"  Log loss:           {log_loss(y_historical, historical_probability):.4f}")
     print(f"  Baseline log loss:  {log_loss(y_historical, historical_baseline_probability):.4f}")
+
+    print_temporal_distribution(dataset)
 
     evaluate_chronological_folds(dataset)
 
