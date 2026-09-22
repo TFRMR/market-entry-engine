@@ -586,7 +586,8 @@ def build_structural_features(frame: pd.DataFrame) -> pd.DataFrame:
     result = add_active_structure_features(result)
     result = add_trend_range_features(result)
     result = add_liquidity_features(result)
-    return add_order_block_features(result)
+    result = add_order_block_features(result)
+    return add_sr_location_features(result)
 
 
 def add_structure_event_features(frame: pd.DataFrame) -> pd.DataFrame:
