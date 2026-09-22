@@ -305,6 +305,7 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     result = add_fvg_features(result)
     result = add_micro_structure_features(result)
     result = add_structure_event_features(result)
+    result = add_event_sequence_features(result)
     result = add_active_structure_features(result)
     result = add_trend_range_features(result)
     result = add_liquidity_features(result)
@@ -319,6 +320,7 @@ def build_structural_features(frame: pd.DataFrame) -> pd.DataFrame:
     """Build the structural feature set for the current blueprint."""
 
     result = add_structure_event_features(frame)
+    result = add_event_sequence_features(result)
     result = add_active_structure_features(result)
     result = add_trend_range_features(result)
     result = add_liquidity_features(result)
@@ -443,6 +445,178 @@ def add_structure_event_features(frame: pd.DataFrame) -> pd.DataFrame:
 
     return result
 
+
+def add_event_sequence_features(frame: pd.DataFrame) -> pd.DataFrame:
+    """Project confirmed structure-event history into point-in-time features."""
+    result = frame.copy()
+    structural = build_structural_sequence(result)
+    _, events = process_structural_candles(structural)
+
+    size = len(result)
+    events_by_index: dict[int, list] = {}
+
+    for event in events:
+        if event.index < 0 or event.index >= size:
+            raise ValueError("Structure event index is outside the feature frame.")
+        events_by_index.setdefault(event.index, []).append(event)
+
+    event_count = np.zeros(size, dtype=int)
+    last_event_index = np.full(size, np.nan)
+    last_event_age = np.full(size, np.nan)
+    last_event_type = np.full(size, None, dtype=object)
+    last_event_direction = np.full(size, None, dtype=object)
+    last_event_scope = np.full(size, None, dtype=object)
+
+    previous_event_index = np.full(size, np.nan)
+    previous_event_age = np.full(size, np.nan)
+    previous_event_type = np.full(size, None, dtype=object)
+    previous_event_direction = np.full(size, None, dtype=object)
+    previous_event_scope = np.full(size, None, dtype=object)
+
+    events_since_last_bos = np.full(size, np.nan)
+    events_since_last_swing = np.full(size, np.nan)
+    bars_since_last_bos = np.full(size, np.nan)
+    bars_since_last_swing = np.full(size, np.nan)
+
+    total_events = 0
+    last_event = None
+    previous_event = None
+    events_after_bos = None
+    events_after_swing = None
+    last_bos_index = None
+    last_swing_index = None
+
+    for position in range(size):
+        position_events = events_by_index.get(position, [])
+
+        for event in position_events:
+            previous_event = last_event
+            last_event = event
+            total_events += 1
+
+            if event.event.endswith("_BOS"):
+                events_after_bos = 0
+                last_bos_index = position
+            elif events_after_bos is not None:
+                events_after_bos += 1
+
+            if event.event.startswith("SWING_"):
+                events_after_swing = 0
+                last_swing_index = position
+            elif events_after_swing is not None:
+                events_after_swing += 1
+
+        # Multiple events can occur on one candle. The BOS/swing event
+        # itself is the zero point, so events on the same candle must not
+        # increment the counter after the reset.
+        if any(event.event.endswith("_BOS") for event in position_events):
+            events_after_bos = 0
+        if any(event.event.startswith("SWING_") for event in position_events):
+            events_after_swing = 0
+
+        event_count[position] = total_events
+
+        if last_event is not None:
+            last_event_index[position] = last_event.index
+            last_event_age[position] = position - last_event.index
+            last_event_type[position] = last_event.event
+            last_event_direction[position] = (
+                last_event.direction.value
+                if last_event.direction is not None
+                else None
+            )
+            last_event_scope[position] = last_event.scope.value
+
+        if previous_event is not None:
+            previous_event_index[position] = previous_event.index
+            previous_event_age[position] = position - previous_event.index
+            previous_event_type[position] = previous_event.event
+            previous_event_direction[position] = (
+                previous_event.direction.value
+                if previous_event.direction is not None
+                else None
+            )
+            previous_event_scope[position] = previous_event.scope.value
+
+        if events_after_bos is not None:
+            events_since_last_bos[position] = events_after_bos
+
+        if events_after_swing is not None:
+            events_since_last_swing[position] = events_after_swing
+
+        if last_bos_index is not None:
+            bars_since_last_bos[position] = position - last_bos_index
+
+        if last_swing_index is not None:
+            bars_since_last_swing[position] = position - last_swing_index
+
+    result["structure_event_count"] = event_count
+    result["structure_last_event_index"] = pd.Series(
+        last_event_index,
+        index=result.index,
+    )
+    result["structure_last_event_age"] = pd.Series(
+        last_event_age,
+        index=result.index,
+    )
+    result["structure_last_event_type"] = pd.Series(
+        last_event_type,
+        index=result.index,
+        dtype="object",
+    )
+    result["structure_last_event_direction"] = pd.Series(
+        last_event_direction,
+        index=result.index,
+        dtype="object",
+    )
+    result["structure_last_event_scope"] = pd.Series(
+        last_event_scope,
+        index=result.index,
+        dtype="object",
+    )
+
+    result["structure_previous_event_index"] = pd.Series(
+        previous_event_index,
+        index=result.index,
+    )
+    result["structure_previous_event_age"] = pd.Series(
+        previous_event_age,
+        index=result.index,
+    )
+    result["structure_previous_event_type"] = pd.Series(
+        previous_event_type,
+        index=result.index,
+        dtype="object",
+    )
+    result["structure_previous_event_direction"] = pd.Series(
+        previous_event_direction,
+        index=result.index,
+        dtype="object",
+    )
+    result["structure_previous_event_scope"] = pd.Series(
+        previous_event_scope,
+        index=result.index,
+        dtype="object",
+    )
+
+    result["structure_events_since_last_bos"] = pd.Series(
+        events_since_last_bos,
+        index=result.index,
+    )
+    result["structure_events_since_last_swing"] = pd.Series(
+        events_since_last_swing,
+        index=result.index,
+    )
+    result["structure_bars_since_last_bos"] = pd.Series(
+        bars_since_last_bos,
+        index=result.index,
+    )
+    result["structure_bars_since_last_swing"] = pd.Series(
+        bars_since_last_swing,
+        index=result.index,
+    )
+
+    return result
 
 def add_active_structure_features(frame: pd.DataFrame) -> pd.DataFrame:
     """Add active structural direction, distances, and event ages."""
