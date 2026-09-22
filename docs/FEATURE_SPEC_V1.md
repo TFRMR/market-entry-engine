@@ -318,6 +318,43 @@ Target selection, previous/next reference routing, target interaction,
 rejection, and transition outcomes are separate transition-layer concepts and
 are not part of `FVGReference` v1.
 
+## 9.7 FVG Transition Reference Routing
+
+The transition routing layer is separate from the immutable historical FVG reference layer.
+
+Only references satisfying `creation_index <= current_index` are available at the current candle.
+
+### Origin
+
+Origin is the FVG containing current close:
+
+`lower <= close <= upper`
+
+Exactly one containing FVG is required.
+
+- zero containing references -> `origin = None`
+- multiple containing references -> `origin = None` because the relationship is spatially ambiguous
+
+Creation order is not used to resolve overlapping candidates.
+
+### Target
+
+For `UP`, target candidates satisfy `lower > close`. Select the candidate with the smallest `lower`.
+
+For `DOWN`, target candidates satisfy `upper < close`. Select the candidate with the largest `upper`.
+
+### Next-after-target
+
+For `UP`, candidates must satisfy `candidate.lower > target.upper`. Select the candidate with the smallest `lower`.
+
+For `DOWN`, candidates must satisfy `candidate.upper < target.lower`. Select the candidate with the largest `upper`.
+
+Overlapping zones are preserved but are not artificially ordered.
+
+### Boundary
+
+This layer only routes references. It does not define target rejection, acceptance, break, previous/next reach, transition outcome, probability, or trading signals.
+
 ## 10. MTF
 
 Reserved for a later specification. MTF features must follow the same as-of-time rule.

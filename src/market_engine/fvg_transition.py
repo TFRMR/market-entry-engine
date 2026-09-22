@@ -75,3 +75,117 @@ def build_fvg_references(frame: pd.DataFrame) -> list[FVGReference]:
             )
 
     return references
+
+
+@dataclass(frozen=True)
+class FVGTransitionReferences:
+    """Spatially routed FVG references available at one candle."""
+
+    origin: FVGReference | None
+    target: FVGReference | None
+    next_after_target: FVGReference | None
+
+
+def route_fvg_references(
+    references: list[FVGReference],
+    *,
+    current_index: int,
+    close: float,
+    direction: str,
+) -> FVGTransitionReferences:
+    """Route the current price through spatially ordered FVG references.
+
+    Only references created on or before ``current_index`` are available.
+
+    Origin:
+    - exactly one available FVG contains ``close``;
+    - zero containing FVGs => no origin;
+    - multiple overlapping containing FVGs => ambiguous, therefore no origin.
+
+    Target:
+    - UP: nearest FVG whose entire zone is strictly above ``close``;
+    - DOWN: nearest FVG whose entire zone is strictly below ``close``.
+
+    Next-after-target:
+    - UP: nearest FVG strictly above the target zone;
+    - DOWN: nearest FVG strictly below the target zone.
+
+    Overlapping references are preserved but are not ordered against each
+    other. This prevents creation order from being used as a hidden spatial
+    assumption.
+    """
+    if direction not in {"UP", "DOWN"}:
+        raise ValueError("direction must be 'UP' or 'DOWN'")
+
+    available = [
+        reference
+        for reference in references
+        if reference.creation_index <= current_index
+    ]
+
+    containing = [
+        reference
+        for reference in available
+        if reference.lower <= close <= reference.upper
+    ]
+
+    origin = containing[0] if len(containing) == 1 else None
+
+    if direction == "UP":
+        target_candidates = [
+            reference
+            for reference in available
+            if reference.lower > close
+        ]
+        target = (
+            min(target_candidates, key=lambda reference: reference.lower)
+            if target_candidates
+            else None
+        )
+
+        next_candidates = (
+            [
+                reference
+                for reference in available
+                if target is not None and reference.lower > target.upper
+            ]
+            if target is not None
+            else []
+        )
+        next_after_target = (
+            min(next_candidates, key=lambda reference: reference.lower)
+            if next_candidates
+            else None
+        )
+    else:
+        target_candidates = [
+            reference
+            for reference in available
+            if reference.upper < close
+        ]
+        target = (
+            max(target_candidates, key=lambda reference: reference.upper)
+            if target_candidates
+            else None
+        )
+
+        next_candidates = (
+            [
+                reference
+                for reference in available
+                if target is not None and reference.upper < target.lower
+            ]
+            if target is not None
+            else []
+        )
+        next_after_target = (
+            max(next_candidates, key=lambda reference: reference.upper)
+            if next_candidates
+            else None
+        )
+
+    return FVGTransitionReferences(
+        origin=origin,
+        target=target,
+        next_after_target=next_after_target,
+    )

@@ -6,6 +6,7 @@ import pytest
 from market_engine.fvg_transition import (
     FVGReference,
     build_fvg_references,
+    route_fvg_references,
 )
 
 
@@ -115,3 +116,111 @@ def test_fvg_reference_requires_ohlc_context() -> None:
         match="Missing FVG reference columns",
     ):
         build_fvg_references(frame)
+
+
+def test_route_fvg_references_routes_upward_spatially():
+    references = [
+        FVGReference(2, "BULLISH", 100.0, 110.0, 10.0),
+        FVGReference(3, "BULLISH", 120.0, 125.0, 5.0),
+        FVGReference(4, "BULLISH", 130.0, 140.0, 10.0),
+    ]
+
+    result = route_fvg_references(
+        references,
+        current_index=4,
+        close=105.0,
+        direction="UP",
+    )
+
+    assert result.origin == references[0]
+    assert result.target == references[1]
+    assert result.next_after_target == references[2]
+
+
+def test_route_fvg_references_routes_downward_spatially():
+    references = [
+        FVGReference(2, "BEARISH", 60.0, 70.0, 10.0),
+        FVGReference(3, "BEARISH", 75.0, 85.0, 10.0),
+        FVGReference(4, "BEARISH", 90.0, 100.0, 10.0),
+    ]
+
+    result = route_fvg_references(
+        references,
+        current_index=4,
+        close=95.0,
+        direction="DOWN",
+    )
+
+    assert result.origin == references[2]
+    assert result.target == references[1]
+    assert result.next_after_target == references[0]
+
+
+def test_route_fvg_references_respects_temporal_availability():
+    references = [
+        FVGReference(2, "BULLISH", 100.0, 110.0, 10.0),
+        FVGReference(10, "BULLISH", 120.0, 125.0, 5.0),
+    ]
+
+    result = route_fvg_references(
+        references,
+        current_index=5,
+        close=105.0,
+        direction="UP",
+    )
+
+    assert result.origin == references[0]
+    assert result.target is None
+    assert result.next_after_target is None
+
+
+def test_route_fvg_references_does_not_order_overlapping_origin_candidates():
+    references = [
+        FVGReference(2, "BULLISH", 100.0, 115.0, 15.0),
+        FVGReference(3, "BULLISH", 110.0, 125.0, 15.0),
+        FVGReference(4, "BULLISH", 130.0, 140.0, 10.0),
+    ]
+
+    result = route_fvg_references(
+        references,
+        current_index=4,
+        close=112.0,
+        direction="UP",
+    )
+
+    assert result.origin is None
+    assert result.target == references[2]
+
+
+def test_route_fvg_references_ignores_overlapping_next_reference():
+    references = [
+        FVGReference(2, "BULLISH", 100.0, 110.0, 10.0),
+        FVGReference(3, "BULLISH", 120.0, 130.0, 10.0),
+        FVGReference(4, "BULLISH", 125.0, 135.0, 10.0),
+        FVGReference(5, "BULLISH", 140.0, 150.0, 10.0),
+    ]
+
+    result = route_fvg_references(
+        references,
+        current_index=5,
+        close=105.0,
+        direction="UP",
+    )
+
+    assert result.origin == references[0]
+    assert result.target == references[1]
+    assert result.next_after_target == references[3]
+
+
+def test_route_fvg_references_rejects_invalid_direction():
+    references = [
+        FVGReference(2, "BULLISH", 100.0, 110.0, 10.0),
+    ]
+
+    with pytest.raises(ValueError, match="direction"):
+        route_fvg_references(
+            references,
+            current_index=2,
+            close=105.0,
+            direction="SIDEWAYS",
+        )

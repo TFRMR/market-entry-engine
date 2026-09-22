@@ -391,6 +391,82 @@ This layer is deliberately separate from `add_fvg_features()`, whose existing co
 
 ---
 
+# 8.1 FVG Transition Reference Routing
+
+The FVG Transition v1 routing layer maps the current price to spatial FVG references without producing a trade signal or transition outcome.
+
+## Temporal availability
+
+Only FVG references satisfying `creation_index <= current_index` are available at the current candle.
+
+## Origin
+
+The origin is the FVG containing the current close:
+
+`lower <= close <= upper`
+
+Exactly one containing FVG is required.
+
+- zero containing FVGs -> `origin = None`
+- multiple containing FVGs -> `origin = None` because the spatial relationship is ambiguous
+
+Creation order is not used to resolve overlapping origin candidates.
+
+## Target
+
+For `UP`, target candidates satisfy `lower > close`. The candidate with the smallest `lower` is selected.
+
+For `DOWN`, target candidates satisfy `upper < close`. The candidate with the largest `upper` is selected.
+
+Target routing therefore follows the nearest fully separated FVG in the direction of travel.
+
+## Next-after-target
+
+For `UP`, candidates must satisfy `candidate.lower > target.upper`. The candidate with the smallest `lower` is selected.
+
+For `DOWN`, candidates must satisfy `candidate.upper < target.lower`. The candidate with the largest `upper` is selected.
+
+Overlapping FVGs are not forced into a spatial ordering.
+
+## Scope
+
+FVG Transition v1 currently provides:
+
+- origin reference
+- target reference
+- next-after-target reference
+- temporal availability
+- directional spatial routing
+- explicit overlap ambiguity
+
+It does not determine rejection, acceptance, break, previous/next reach, transition outcome, probability, or BUY/SELL signals.
+
+# 8.1 FVG Transition Reference Routing
+
+FVG Transition v1 routes the current price through historical FVG references without producing a trade signal or transition outcome.
+
+## Temporal availability
+
+Only references satisfying `creation_index <= current_index` are available.
+
+## Origin
+
+Origin is the FVG containing current close: `lower <= close <= upper`. Exactly one containing FVG is required. Zero or multiple containing FVGs produce `origin = None`. Creation order is not used to resolve overlap.
+
+## Target
+
+For `UP`, candidates satisfy `lower > close`; select the smallest `lower`. For `DOWN`, candidates satisfy `upper < close`; select the largest `upper`.
+
+## Next-after-target
+
+For `UP`, candidates satisfy `candidate.lower > target.upper`; select the smallest `lower`. For `DOWN`, candidates satisfy `candidate.upper < target.lower`; select the largest `upper`.
+
+Overlapping FVGs are not forced into a spatial ordering.
+
+## Scope
+
+This layer provides origin, target, next-after-target, temporal availability, directional spatial routing, and explicit overlap ambiguity. It does not determine rejection, acceptance, break, reach, transition outcome, probability, or BUY/SELL signals.
+
 # 9. Distance to Structure
 
 Legacy distance features:
