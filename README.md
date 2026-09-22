@@ -78,7 +78,8 @@ Completed and locked:
 
 Current next step:
 
-- continue deterministic context enrichment with displacement / price action
+- complete deterministic FVG Transition v1 routing and its temporal/spatial reference semantics
+- then continue deterministic context enrichment with displacement / price action
 - then implement pullback state and event sequence
 - audit each layer for as-of correctness and full context leakage before ML feature selection
 - keep Order Block POI ranking separate from the primitive candidate/projection layer
@@ -207,4 +208,4 @@ The current development quality gate is:
 Ruff covers the engine and test suite. Exploratory audit scripts under
 scripts/audit_*.py are intentionally excluded from the production lint scope.
 
-Current checkpoint: Market Structure v1 is locked, including deterministic CHoCH semantics; Context v1 trend/regime, range, liquidity, FVG, Order Block, and canonical structural S/R + Location are implemented and quality-gated; next step is deterministic displacement / price action.
+Current checkpoint: Market Structure v1 is locked, including deterministic CHoCH semantics; Context v1 trend/regime, range, liquidity, FVG, Order Block, canonical structural S/R + Location, and FVG Transition reference routing are implemented and quality-gated; next step is deterministic displacement / price action.
