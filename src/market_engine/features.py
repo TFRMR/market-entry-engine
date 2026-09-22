@@ -353,8 +353,125 @@ def add_sr_location_features(frame: pd.DataFrame) -> pd.DataFrame:
         pd.Series(np.nan, index=result.index),
     )
 
-    return result
+    return _add_d1_sr_mapping(result)
 
+
+def _add_d1_sr_mapping(result: pd.DataFrame) -> pd.DataFrame:
+    """Map completed daily structural S/R and direction into intraday rows."""
+    if "timestamp" not in result.columns:
+        return result
+
+    timestamps = pd.to_datetime(result["timestamp"])
+    daily = (
+        result.assign(_date=timestamps.dt.floor("D"))
+        .groupby("_date", sort=True)
+        .agg(
+            timestamp=("timestamp", "max"),
+            open=("open", "first"),
+            high=("high", "max"),
+            low=("low", "min"),
+            close=("close", "last"),
+        )
+        .reset_index()
+    )
+    if daily.empty:
+        return result
+
+    structural = build_structural_sequence(daily)
+    swings, _ = process_structural_candles(structural)
+    _, _, snapshots = process_structural_candles_with_context(structural)
+
+    by_confirmation: dict[int, list] = {}
+    for swing in swings:
+        by_confirmation.setdefault(swing.confirmation_index, []).append(swing)
+
+    daily_context = []
+    highs = []
+    lows = []
+    snapshot_by_index = {
+        snapshot.index: snapshot
+        for snapshot in snapshots
+    }
+
+    for position, row in daily.iterrows():
+        for swing in by_confirmation.get(position, []):
+            (highs if swing.swing_type is SwingType.HIGH else lows).append(swing)
+
+        snapshot = snapshot_by_index.get(position)
+        direction = 0
+        if snapshot is not None and snapshot.direction is not None:
+            direction = 1 if snapshot.direction is Direction.UP else -1
+
+        current_close = float(row["close"])
+        supports = [s for s in lows if s.price <= current_close]
+        resistances = [s for s in highs if s.price >= current_close]
+
+        support = max(supports, key=lambda s: (s.price, s.confirmation_index)) if supports else None
+        resistance = min(resistances, key=lambda s: (s.price, -s.confirmation_index)) if resistances else None
+
+        daily_context.append({
+            "date": row["_date"],
+            "direction": direction,
+            "support": support.price if support else np.nan,
+            "resistance": resistance.price if resistance else np.nan,
+            "support_age": (
+                position - support.confirmation_index if support else np.nan
+            ),
+            "resistance_age": (
+                position - resistance.confirmation_index if resistance else np.nan
+            ),
+            "support_label": support.label if support else None,
+            "resistance_label": resistance.label if resistance else None,
+            "support_scope": support.scope.value if support else None,
+            "resistance_scope": resistance.scope.value if resistance else None,
+        })
+
+    context = pd.DataFrame(daily_context)
+    if context.empty:
+        return result
+
+    # A M30 candle may only use completed prior daily context. The current
+    # daily candle is intentionally excluded from the mapping.
+    context["available_date"] = context["date"].shift(-1)
+    context = context.dropna(subset=["available_date"])
+
+    mapped = pd.merge_asof(
+        pd.DataFrame({
+            "_row_index": np.arange(len(result)),
+            "_date": timestamps.dt.floor("D"),
+        }).sort_values("_date"),
+        context.sort_values("available_date"),
+        left_on="_date",
+        right_on="available_date",
+        direction="backward",
+        allow_exact_matches=True,
+    ).sort_values("_row_index")
+
+    mapped = mapped.set_index(result.index)
+
+    result["d1_structure_direction"] = mapped["direction"].to_numpy(dtype=float)
+    result["d1_sr_support"] = mapped["support"].to_numpy(dtype=float)
+    result["d1_sr_resistance"] = mapped["resistance"].to_numpy(dtype=float)
+    result["d1_sr_support_present"] = np.isfinite(result["d1_sr_support"]).astype(int)
+    result["d1_sr_resistance_present"] = np.isfinite(result["d1_sr_resistance"]).astype(int)
+    result["d1_sr_support_age"] = mapped["support_age"].to_numpy(dtype=float)
+    result["d1_sr_resistance_age"] = mapped["resistance_age"].to_numpy(dtype=float)
+    result["d1_sr_support_label"] = pd.Series(
+        mapped["support_label"].to_numpy(), index=result.index, dtype="object"
+    )
+    result["d1_sr_resistance_label"] = pd.Series(
+        mapped["resistance_label"].to_numpy(), index=result.index, dtype="object"
+    )
+    result["d1_sr_support_scope"] = pd.Series(
+        mapped["support_scope"].to_numpy(), index=result.index, dtype="object"
+    )
+    result["d1_sr_resistance_scope"] = pd.Series(
+        mapped["resistance_scope"].to_numpy(), index=result.index, dtype="object"
+    )
+    result["distance_to_d1_support"] = result["close"] - result["d1_sr_support"]
+    result["distance_to_d1_resistance"] = result["d1_sr_resistance"] - result["close"]
+
+    return result
 
 def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     """Build the deterministic price-action and structural feature set."""
