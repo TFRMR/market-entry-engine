@@ -353,6 +353,7 @@ def add_sr_location_features(frame: pd.DataFrame) -> pd.DataFrame:
         pd.Series(np.nan, index=result.index),
     )
 
+    result = _add_sr_lifecycle_features(result, "local")
     return _add_d1_sr_mapping(result)
 
 
@@ -471,7 +472,95 @@ def _add_d1_sr_mapping(result: pd.DataFrame) -> pd.DataFrame:
     result["distance_to_d1_support"] = result["close"] - result["d1_sr_support"]
     result["distance_to_d1_resistance"] = result["d1_sr_resistance"] - result["close"]
 
+    result = _add_sr_lifecycle_features(result, "d1")
     return result
+
+def _add_sr_lifecycle_features(
+    result: pd.DataFrame,
+    prefix: str,
+) -> pd.DataFrame:
+    """Track deterministic S/R interaction state from a point-in-time level."""
+    support_col = f"{prefix}_sr_support"
+    resistance_col = f"{prefix}_sr_resistance"
+    if support_col not in result.columns or resistance_col not in result.columns:
+        return result
+
+    high = result["high"].to_numpy(dtype=float)
+    low = result["low"].to_numpy(dtype=float)
+    close = result["close"].to_numpy(dtype=float)
+
+    for side, level_col in (("support", support_col), ("resistance", resistance_col)):
+        levels = result[level_col].to_numpy(dtype=float)
+        state = np.empty(len(result), dtype=object)
+        event = np.empty(len(result), dtype=object)
+        state[:] = None
+        event[:] = "NONE"
+
+        previous_level = np.nan
+        current_state = None
+        broken_level = np.nan
+
+        for position, level in enumerate(levels):
+            if not np.isfinite(level):
+                state[position] = None
+                event[position] = "NONE"
+                continue
+
+            if not np.isfinite(previous_level) or level != previous_level:
+                previous_level = level
+                current_state = "CREATED"
+                broken_level = np.nan
+                event[position] = "CREATED"
+            else:
+                if current_state == "BROKEN":
+                    if side == "support" and close[position] < level <= high[position]:
+                        current_state = "FLIPPED"
+                        event[position] = "FLIPPED"
+                    elif side == "resistance" and low[position] <= level < close[position]:
+                        current_state = "FLIPPED"
+                        event[position] = "FLIPPED"
+                    elif side == "support" and close[position] < level:
+                        event[position] = "BROKEN"
+                    elif side == "resistance" and close[position] > level:
+                        event[position] = "BROKEN"
+                elif current_state in {"CREATED", "TESTED", "SWEPT", "FLIPPED"}:
+                    if side == "support":
+                        touched = low[position] <= level <= high[position]
+                        swept = low[position] < level and close[position] >= level
+                        broken = close[position] < level
+                    else:
+                        touched = low[position] <= level <= high[position]
+                        swept = high[position] > level and close[position] <= level
+                        broken = close[position] > level
+
+                    if broken:
+                        current_state = "BROKEN"
+                        broken_level = level
+                        event[position] = "BROKEN"
+                    elif swept:
+                        current_state = "SWEPT"
+                        event[position] = "SWEPT"
+                    elif touched:
+                        current_state = "TESTED"
+                        event[position] = "TESTED"
+                    else:
+                        event[position] = "NONE"
+
+            state[position] = current_state
+
+        result[f"{prefix}_sr_{side}_state"] = pd.Series(
+            state,
+            index=result.index,
+            dtype="object",
+        )
+        result[f"{prefix}_sr_{side}_event"] = pd.Series(
+            event,
+            index=result.index,
+            dtype="object",
+        )
+
+    return result
+
 
 def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     """Build the deterministic price-action and structural feature set."""
