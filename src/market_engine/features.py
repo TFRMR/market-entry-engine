@@ -511,7 +511,7 @@ def _add_sr_lifecycle_features(
                     state[position] = tracked_state
                     continue
 
-            if np.isfinite(tracked_level):
+            if np.isfinite(tracked_level) and tracked_state not in {"BROKEN", "FLIPPED"}:
                 broken = (
                     current_close < tracked_level
                     if side == "support"
