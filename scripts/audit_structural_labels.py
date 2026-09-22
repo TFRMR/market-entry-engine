@@ -203,7 +203,13 @@ def _audit_sr_point_in_time(frame: pd.DataFrame) -> None:
 
         actual = frame.copy()
         actual["_date"] = ts.dt.floor("D")
-        actual = actual.merge(expected, left_on="_date", right_on="available_date", how="left")
+        actual = actual.merge(
+            expected,
+            left_on="_date",
+            right_on="available_date",
+            how="left",
+            suffixes=("", "_expected"),
+        )
 
         for actual_col, expected_col in (
             ("d1_structure_direction", "direction"),
