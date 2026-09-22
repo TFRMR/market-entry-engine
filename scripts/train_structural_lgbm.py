@@ -24,6 +24,8 @@ HORIZON = 10
 FEATURE_COLUMNS = (
     "structure_bullish_bos",
     "structure_bearish_bos",
+    "structure_bullish_choch",
+    "structure_bearish_choch",
     "structure_swing_high_valid",
     "structure_swing_low_valid",
     "structure_internal_bos",
@@ -232,9 +234,9 @@ def print_feature_drift(
             if early_numeric.empty or late_numeric.empty:
                 drift = 0.0
             else:
+                combined = pd.concat([early_numeric, late_numeric])
                 pooled_iqr = float(
-                    pd.concat([early_numeric, late_numeric]).quantile(0.75)
-                    - pd.concat([early_numeric, late_numeric]).quantile(0.25)
+                    combined.quantile(0.75) - combined.quantile(0.25)
                 )
                 median_shift = abs(
                     float(early_numeric.median()) - float(late_numeric.median())
@@ -423,7 +425,9 @@ def main() -> None:
     model.fit(
         X_train,
         y_train,
-        categorical_feature=[column for column in CATEGORICAL_COLUMNS if column in model_columns],
+        categorical_feature=[
+            column for column in CATEGORICAL_COLUMNS if column in model_columns
+        ],
     )
 
     train_probability = model.predict_proba(X_train)[:, 1]
