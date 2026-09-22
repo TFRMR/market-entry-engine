@@ -9,7 +9,7 @@ import pandas as pd
 
 from market_engine.data import load_mt5_csv
 from market_engine.entry import build_setup_candidates
-from market_engine.features import build_features, build_structural_features
+from market_engine.features import build_structural_features
 from market_engine.holdout import (
     HISTORICAL_AUDIT_CUTOFF,
     historical_boundary_index,
@@ -27,75 +27,6 @@ from market_engine.structure import (
     process_structural_candles_with_context,
 )
 
-
-ALL_FEATURE_COLUMNS = (
-    "candle_range",
-    "candle_body",
-    "body_ratio",
-    "upper_wick_ratio",
-    "lower_wick_ratio",
-    "close_position",
-    "is_bullish",
-    "is_bearish",
-    "true_range",
-    "atr_14",
-    "range_to_atr",
-    "ema_5",
-    "ema_20",
-    "ema_50",
-    "price_vs_ema_5",
-    "price_vs_ema_20",
-    "price_vs_ema_50",
-    "ema_5_vs_20",
-    "ema_20_vs_50",
-    "ema_alignment",
-    "previous_high_20",
-    "previous_low_20",
-    "previous_high_50",
-    "previous_low_50",
-    "distance_to_high_20",
-    "distance_to_low_20",
-    "distance_to_high_50",
-    "distance_to_low_50",
-    "breakout_above_20",
-    "breakout_below_20",
-    "breakout_above_50",
-    "breakout_below_50",
-    "return_3",
-    "return_6",
-    "return_12",
-    "volume_ratio_20",
-    "volume_change_1",
-    "high_vs_previous_high_1",
-    "high_vs_previous_high_2",
-    "high_vs_previous_high_3",
-    "low_vs_previous_low_1",
-    "low_vs_previous_low_2",
-    "low_vs_previous_low_3",
-    "range_vs_avg_3",
-    "range_vs_avg_5",
-    "structure_bullish_bos",
-    "structure_bearish_bos",
-    "structure_swing_high_valid",
-    "structure_swing_low_valid",
-    "structure_internal_bos",
-    "structure_external_bos",
-    "structure_internal_swing",
-    "structure_external_swing",
-    "structure_last_valid_high",
-    "structure_last_valid_low",
-    "structure_hh",
-    "structure_hl",
-    "structure_lh",
-    "structure_ll",
-    "structure_direction",
-    "structure_distance_to_high",
-    "structure_distance_to_low",
-    "structure_historical_distance_to_high",
-    "structure_historical_distance_to_low",
-    "structure_bars_since_last_swing",
-    "structure_bars_since_last_bos",
-)
 
 STRUCTURAL_FEATURE_COLUMNS = (
     # Structure event flags
@@ -202,11 +133,6 @@ def _parse_args() -> argparse.Namespace:
         "--with-features",
         action="store_true",
         help="Also build the full feature frame and audit feature missingness.",
-    )
-    parser.add_argument(
-        "--legacy-features",
-        action="store_true",
-        help="With --with-features, audit the legacy momentum/EMA set as well (ablation only).",
     )
     parser.add_argument(
         "--include-historical-audit",
@@ -353,12 +279,8 @@ def main() -> None:
     feature_frame = None
     feature_columns: tuple[str, ...] = ()
     if args.with_features:
-        if args.legacy_features:
-            feature_frame = build_features(frame)
-            feature_columns = ALL_FEATURE_COLUMNS
-        else:
-            feature_frame = build_structural_features(frame)
-            feature_columns = STRUCTURAL_FEATURE_COLUMNS
+        feature_frame = build_structural_features(frame)
+        feature_columns = STRUCTURAL_FEATURE_COLUMNS
 
     labeled = build_setup_label_dataset(
         candidates=candidates,
@@ -649,7 +571,7 @@ def main() -> None:
         print()
     else:
         print("Features:")
-        print("  Skipped (use --with-features for the full feature audit).")
+        print("  Skipped (use --with-features to audit structural features).")
         print()
     print("Missingness semantics:")
 

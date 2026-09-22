@@ -5,7 +5,6 @@ import pytest
 from market_engine.features import (
     add_active_structure_features,
     add_fvg_features,
-    add_micro_structure_features,
     add_pullback_features,
     build_features,
 )
@@ -35,32 +34,6 @@ def make_sample_frame(rows: int = 60) -> pd.DataFrame:
     )
 
 
-def test_micro_structure_features_calculate_context() -> None:
-    frame = make_sample_frame(rows=10)
-
-    result = add_micro_structure_features(frame)
-
-    expected_columns = {
-        "high_vs_previous_high_1",
-        "high_vs_previous_high_2",
-        "high_vs_previous_high_3",
-        "low_vs_previous_low_1",
-        "low_vs_previous_low_2",
-        "low_vs_previous_low_3",
-        "range_vs_avg_3",
-        "range_vs_avg_5",
-    }
-
-    assert expected_columns.issubset(result.columns)
-    assert len(result) == len(frame)
-
-    assert result["high_vs_previous_high_1"].iloc[:1].isna().all()
-    assert result["high_vs_previous_high_2"].iloc[:2].isna().all()
-    assert result["high_vs_previous_high_3"].iloc[:3].isna().all()
-    assert result["range_vs_avg_3"].iloc[:3].isna().all()
-    assert result["range_vs_avg_5"].iloc[:5].isna().all()
-
-
 def test_active_structure_features_use_positional_candle_age() -> None:
     frame = make_sample_frame(rows=30)
     shifted = frame.copy()
@@ -74,26 +47,6 @@ def test_active_structure_features_use_positional_candle_age() -> None:
         result["structure_bars_since_last_swing"].to_numpy(),
         equal_nan=True,
     )
-
-
-def test_build_features_contains_micro_structure_features() -> None:
-    frame = make_sample_frame()
-
-    result = build_features(frame)
-
-    expected_columns = {
-        "high_vs_previous_high_1",
-        "high_vs_previous_high_2",
-        "high_vs_previous_high_3",
-        "low_vs_previous_low_1",
-        "low_vs_previous_low_2",
-        "low_vs_previous_low_3",
-        "range_vs_avg_3",
-        "range_vs_avg_5",
-    }
-
-    assert expected_columns.issubset(result.columns)
-    assert len(result) == len(frame)
 
 
 def test_active_structure_features_carry_snapshot_across_inside_candles():

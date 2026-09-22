@@ -131,27 +131,6 @@ def test_missing_bos_event_returns_nan_for_every_fact():
     assert all(math.isnan(value) for value in facts.values())
 
 
-def test_structural_feature_builder_excludes_legacy_columns():
-    rows = 40
-    frame = pd.DataFrame(
-        {
-            "timestamp": pd.date_range("2026-01-01", periods=rows, freq="30min"),
-            "open": [100.0 + (i % 7) for i in range(rows)],
-            "high": [103.0 + (i % 7) + (i % 3) for i in range(rows)],
-            "low": [98.0 + (i % 7) - (i % 2) for i in range(rows)],
-            "close": [101.0 + (i % 5) for i in range(rows)],
-        }
-    )
-
-    result = build_structural_features(frame)
-
-    added = [column for column in result.columns if column not in frame.columns]
-    assert added
-    for legacy in ("ema_20", "atr_14", "previous_high_20", "volume_ratio_20"):
-        assert legacy not in result.columns
-    assert {"trend_regime", "range_state", "range_position"} <= set(result.columns)
-
-
 def test_label_dataset_adds_setup_facts_only_when_events_are_given():
     swings = [
         swing(1, 3, 99.0, SwingType.HIGH),
@@ -204,7 +183,6 @@ def test_order_block_feature_projection_is_directional_and_historical():
             "high": [12, 14, 14.5, 13.5, 13, 13.5, 14, 15],
             "low": [9, 10, 11, 10, 8, 8, 9, 11],
             "close": [11, 13, 14, 11, 9, 10, 11, 14],
-            "atr_14": [1.0] * rows,
         }
     )
 

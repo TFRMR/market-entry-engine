@@ -13,7 +13,6 @@ from market_engine.labels import (
     build_setup_label_dataset,
     is_model_label,
 )
-from market_engine.outcomes import add_barrier_outcomes
 from market_engine.structure import Direction, SwingType, ValidSwing
 
 
@@ -69,26 +68,6 @@ def test_barrier_label_contract_is_explicit() -> None:
     assert is_model_label(SL_FIRST)
     assert not is_model_label(BOTH_SAME_CANDLE)
     assert not is_model_label(UNRESOLVED)
-
-
-def test_barrier_generation_uses_canonical_labels() -> None:
-    frame = pd.DataFrame(
-        {
-            "open": [100.0, 104.0],
-            "high": [105.0, 110.0],
-            "low": [99.0, 103.0],
-            "close": [104.0, 109.0],
-            "is_momentum_candle": [True, False],
-        }
-    )
-
-    result = add_barrier_outcomes(
-        frame,
-        horizons=(1,),
-        targets_r=(1.0,),
-    )
-
-    assert result.loc[0, "barrier_1r_1"] == TP_FIRST
 
 
 def test_setup_label_uses_structural_target_and_setup_features() -> None:

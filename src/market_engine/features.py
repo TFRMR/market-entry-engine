@@ -303,7 +303,6 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     """Build the deterministic price-action and structural feature set."""
     result = add_price_action_features(frame)
     result = add_fvg_features(result)
-    result = add_micro_structure_features(result)
     result = add_structure_event_features(result)
     result = add_event_sequence_features(result)
     result = add_active_structure_features(result)
@@ -325,44 +324,6 @@ def build_structural_features(frame: pd.DataFrame) -> pd.DataFrame:
     result = add_trend_range_features(result)
     result = add_liquidity_features(result)
     return add_order_block_features(result)
-
-
-def add_micro_structure_features(frame: pd.DataFrame) -> pd.DataFrame:
-    """Add short-term price structure and range expansion features."""
-    result = frame.copy()
-
-    for window in (1, 2, 3):
-        previous_high = result["high"].shift(1).rolling(
-            window=window,
-            min_periods=window,
-        ).max()
-
-        previous_low = result["low"].shift(1).rolling(
-            window=window,
-            min_periods=window,
-        ).min()
-
-        result[f"high_vs_previous_high_{window}"] = (
-            result["high"] / previous_high - 1
-        )
-
-        result[f"low_vs_previous_low_{window}"] = (
-            result["low"] / previous_low - 1
-        )
-
-    candle_range = result["high"] - result["low"]
-
-    for window in (3, 5):
-        previous_average_range = candle_range.shift(1).rolling(
-            window=window,
-            min_periods=window,
-        ).mean()
-
-        result[f"range_vs_avg_{window}"] = (
-            candle_range / previous_average_range
-        )
-
-    return result
 
 
 def add_structure_event_features(frame: pd.DataFrame) -> pd.DataFrame:
