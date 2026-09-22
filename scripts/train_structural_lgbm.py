@@ -24,8 +24,6 @@ HORIZON = 10
 FEATURE_COLUMNS = (
     "structure_bullish_bos",
     "structure_bearish_bos",
-    "structure_bullish_choch",
-    "structure_bearish_choch",
     "structure_swing_high_valid",
     "structure_swing_low_valid",
     "structure_internal_bos",
@@ -109,7 +107,6 @@ CATEGORICAL_COLUMNS = (
 )
 
 
-
 def select_model_features(
     train_frame: pd.DataFrame,
 ) -> tuple[list[str], list[str], list[tuple[str, str]]]:
@@ -146,6 +143,7 @@ def select_model_features(
 
     return unique_columns, constant_features, duplicate_feature_pairs
 
+
 def make_model() -> lgb.LGBMClassifier:
     return lgb.LGBMClassifier(
         objective="binary",
@@ -168,7 +166,6 @@ def prepare_features(frame: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
-
 def print_temporal_distribution(dataset: pd.DataFrame, bucket_count: int = 4) -> None:
     """Describe outcome distribution across chronological buckets."""
 
@@ -189,6 +186,100 @@ def print_temporal_distribution(dataset: pd.DataFrame, bucket_count: int = 4) ->
             f"TP_FIRST={tp_rate:.4f} "
             f"median_RR={median_rr:.4f}"
         )
+
+
+def print_feature_drift(
+    dataset: pd.DataFrame,
+    model_columns: list[str],
+    bucket_count: int = 4,
+    top_n: int = 15,
+) -> None:
+    """Describe simple early-vs-late feature distribution drift."""
+
+    buckets = pd.qcut(
+        dataset["setup_timestamp"].rank(method="first"),
+        q=bucket_count,
+        labels=False,
+    )
+    grouped = {
+        int(bucket): group
+        for bucket, group in dataset.groupby(buckets, sort=True)
+    }
+    early = grouped[0]
+    late = grouped[bucket_count - 1]
+
+    rows: list[dict[str, object]] = []
+
+    for column in model_columns:
+        early_values = early[column]
+        late_values = late[column]
+        missing_delta = abs(
+            float(early_values.isna().mean())
+            - float(late_values.isna().mean())
+        )
+
+        if column in CATEGORICAL_COLUMNS:
+            early_dist = early_values.value_counts(normalize=True, dropna=False)
+            late_dist = late_values.value_counts(normalize=True, dropna=False)
+            categories = early_dist.index.union(late_dist.index)
+            early_dist = early_dist.reindex(categories, fill_value=0.0)
+            late_dist = late_dist.reindex(categories, fill_value=0.0)
+            drift = float((early_dist - late_dist).abs().max())
+            metric = "max_category_delta"
+        else:
+            early_numeric = pd.to_numeric(early_values, errors="coerce").dropna()
+            late_numeric = pd.to_numeric(late_values, errors="coerce").dropna()
+            if early_numeric.empty or late_numeric.empty:
+                drift = 0.0
+            else:
+                pooled_iqr = float(
+                    pd.concat([early_numeric, late_numeric]).quantile(0.75)
+                    - pd.concat([early_numeric, late_numeric]).quantile(0.25)
+                )
+                median_shift = abs(
+                    float(early_numeric.median()) - float(late_numeric.median())
+                )
+                drift = (
+                    median_shift / pooled_iqr
+                    if pooled_iqr > 0
+                    else median_shift
+                )
+            metric = "median_shift_over_pooled_iqr"
+
+        rows.append(
+            {
+                "feature": column,
+                "type": "categorical" if column in CATEGORICAL_COLUMNS else "numeric",
+                "drift": drift,
+                "missing_delta": missing_delta,
+                "metric": metric,
+            }
+        )
+
+    report = pd.DataFrame(rows).sort_values(
+        ["drift", "missing_delta"],
+        ascending=False,
+    )
+
+    print()
+    print("Feature distribution drift (earliest vs latest bucket):")
+    print(
+        f"  Early period: {early['setup_timestamp'].min()} -> "
+        f"{early['setup_timestamp'].max()}"
+    )
+    print(
+        f"  Late period:  {late['setup_timestamp'].min()} -> "
+        f"{late['setup_timestamp'].max()}"
+    )
+    print(
+        report.head(top_n).to_string(
+            index=False,
+            formatters={
+                "drift": "{:.4f}".format,
+                "missing_delta": "{:.4f}".format,
+            },
+        )
+    )
 
 
 def evaluate_chronological_folds(
@@ -239,6 +330,7 @@ def evaluate_chronological_folds(
             f"log_loss={log_loss(test['target'], probability):.4f} "
             f"baseline={log_loss(test['target'], baseline_probability):.4f}"
         )
+
 
 def main() -> None:
     print("=== Canonical Structural LightGBM Baseline ===")
@@ -368,6 +460,7 @@ def main() -> None:
     print(f"  Baseline log loss:  {log_loss(y_historical, historical_baseline_probability):.4f}")
 
     print_temporal_distribution(dataset)
+    print_feature_drift(dataset, model_columns)
 
     evaluate_chronological_folds(dataset)
 
