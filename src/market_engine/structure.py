@@ -232,37 +232,51 @@ def _process_structural_candles(
             last_swing_confirmation_index = checkpoint.last_swing.confirmation_index
 
     for candle in candles:
-        high_target = (
-            external_high
-            if external_high is not None
+        # The outer boundary has priority only when the candle actually
+        # reaches it. Otherwise the latest active swing is the BOS target.
+        # This keeps INTERNAL BOS inside the EXTERNAL range while preserving
+        # the outer boundary as the next EXTERNAL BOS target.
+        if (
+            external_high is not None
             and candle.index > external_high.confirmation_index
             and candle.high > external_high.price
             and broken_high_index != external_high.index
-            else last_high
-        )
+        ):
+            high_target = external_high
+        else:
+            high_target = last_high
+
         bos_high = (
             high_target
             if high_target is not None
             and candle.index > high_target.confirmation_index
             and candle.high > high_target.price
-            and broken_high_index != high_target.index
+            and (
+                high_target.scope is StructureScope.INTERNAL
+                or broken_high_index != high_target.index
+            )
             else None
         )
 
-        low_target = (
-            external_low
-            if external_low is not None
+        if (
+            external_low is not None
             and candle.index > external_low.confirmation_index
             and candle.low < external_low.price
             and broken_low_index != external_low.index
-            else last_low
-        )
+        ):
+            low_target = external_low
+        else:
+            low_target = last_low
+
         bos_low = (
             low_target
             if low_target is not None
             and candle.index > low_target.confirmation_index
             and candle.low < low_target.price
-            and broken_low_index != low_target.index
+            and (
+                low_target.scope is StructureScope.INTERNAL
+                or broken_low_index != low_target.index
+            )
             else None
         )
 
@@ -415,11 +429,17 @@ def _process_structural_candles(
                     state,
                     candle,
                     SwingType.HIGH,
-                    last_high,
+                    (
+                        last_high
+                        if last_high is not None
+                        and last_high.scope is swing_scope
+                        else None
+                    ),
                     swing_scope,
                 )
                 state.previous_swing = state.last_swing
                 state.last_swing = swing
+                state.scope = swing.scope
                 last_high = swing
                 historical_last_high = swing
                 if swing.scope is StructureScope.EXTERNAL:
@@ -475,11 +495,17 @@ def _process_structural_candles(
                     state,
                     candle,
                     SwingType.LOW,
-                    last_low,
+                    (
+                        last_low
+                        if last_low is not None
+                        and last_low.scope is swing_scope
+                        else None
+                    ),
                     swing_scope,
                 )
                 state.previous_swing = state.last_swing
                 state.last_swing = swing
+                state.scope = swing.scope
                 last_low = swing
                 historical_last_low = swing
                 if swing.scope is StructureScope.EXTERNAL:
