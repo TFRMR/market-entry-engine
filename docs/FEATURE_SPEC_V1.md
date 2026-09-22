@@ -217,6 +217,19 @@ Rules:
 - lower_wick_to_body
 - close_position_in_range
 
+Rules:
+
+- `range_atr` is `candle_range / atr_14`.
+- `body_atr` is `candle_body / atr_14`.
+- `upper_wick_to_body` is `upper_wick / candle_body`.
+- `lower_wick_to_body` is `lower_wick / candle_body`.
+- `close_position_in_range` is `(close - low) / candle_range`, equivalent to the existing `close_position` measurement.
+- When `candle_body == 0`, wick-to-body ratios are undefined (`NaN`) rather than infinite.
+- When `atr_14` is unavailable or non-positive, ATR-normalized displacement fields are undefined.
+- These fields describe candle geometry and volatility expansion; they do not encode a trading signal or fixed threshold.
+
+The existing `range_to_atr` field remains available as a compatibility/legacy alias of `range_atr`.
+
 ## 8. Volatility
 
 - atr
