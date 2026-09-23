@@ -598,7 +598,7 @@ def main() -> None:
             row = grouped_rr.loc[label]
             print(
                 f"    {label:10s}: n={int(row['count']):4d} "
-                f"median={row["median"]:.4f} mean={row["mean"]:.4f}"
+                f"median={row['median']:.4f} mean={row['mean']:.4f}"
             )
         print("  reward/risk by direction:")
         direction_rr = labeled.groupby("direction")["reward_risk"].agg(["count", "median", "mean"])
@@ -608,7 +608,7 @@ def main() -> None:
             row = direction_rr.loc[direction]
             print(
                 f"    {direction:10s}: n={int(row['count']):4d} "
-                f"median={row["median"]:.4f} mean={row["mean"]:.4f}"
+                f"median={row['median']:.4f} mean={row['mean']:.4f}"
             )
     print()
     print("Ambiguous barrier:")
