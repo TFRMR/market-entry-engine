@@ -257,6 +257,56 @@ def _audit_sr_point_in_time(frame: pd.DataFrame) -> None:
         raise AssertionError("S/R point-in-time/lifecycle audit failed.")
     print("  Validation: PASS")
 
+def _audit_poi_context(
+    frame: pd.DataFrame,
+    swings,
+    events,
+) -> None:
+    """Independently verify POI/inducement chronology and composition."""
+    order_blocks = find_order_block_candidates(swings, events)
+    inducements = build_inducement_events(swings, frame)
+    pois = build_poi_records(frame, swings, events, order_blocks)
+
+    violations = 0
+
+    for event in inducements:
+        if event.swing_index >= event.index:
+            violations += 1
+        source = next(
+            (swing for swing in swings if swing.index == event.swing_index),
+            None,
+        )
+        if source is None or source.confirmation_index >= event.index:
+            violations += 1
+
+    for poi in pois:
+        if poi.created_index < 0 or poi.created_index >= len(frame):
+            violations += 1
+        if poi.high < poi.low:
+            violations += 1
+        if poi.source_index is not None and poi.source_index > poi.created_index:
+            # A source candle may be earlier than the event/creation point, never later.
+            violations += 1
+
+    obim = [poi for poi in pois if poi.poi_type is POIType.OBIM]
+    for poi in obim:
+        if poi.high < poi.low:
+            violations += 1
+
+    print("POI / inducement point-in-time:")
+    print(f"  Inducement events: {len(inducements):,}")
+    print(f"  POI records:       {len(pois):,}")
+    print(f"  FVG:               {sum(p.poi_type is POIType.FVG for p in pois):,}")
+    print(f"  Order Block:       {sum(p.poi_type is POIType.ORDER_BLOCK for p in pois):,}")
+    print(f"  OBIM:              {len(obim):,}")
+    print(f"  Liquidity:         {sum(p.poi_type is POIType.LIQUIDITY for p in pois):,}")
+    print(f"  Structural S/R:    {sum(p.poi_type is POIType.STRUCTURAL_SR for p in pois):,}")
+    print(f"  Chronology violations: {violations:,}")
+    if violations:
+        raise AssertionError("POI/inducement point-in-time audit failed.")
+    print("  Validation: PASS")
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Audit structural setup labels on an MT5 CSV export."
@@ -312,7 +362,7 @@ def main() -> None:
     _, _, snapshots = process_structural_candles_with_context(structural)
     snapshots_by_index = {snapshot.index: snapshot for snapshot in snapshots}
 
-    # Point-in-time structural chronology audit.
+    _audit_poi_context(frame, swings, events)\n\n    # Point-in-time structural chronology audit.
     chronology_violations: list[tuple[int, str, int, int]] = []
     for snapshot in snapshots:
         setup_index = snapshot.index
