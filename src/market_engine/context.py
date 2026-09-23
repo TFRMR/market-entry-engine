@@ -17,70 +17,30 @@ from market_engine.structure import StructureEvent, ValidSwing
 from market_engine.features import build_structural_features
 
 CONTEXT_COLUMNS: Final[tuple[str, ...]] = (
-    "structure_direction",
-    "structure_last_event_type",
-    "structure_last_event_direction",
-    "structure_last_event_scope",
-    "structure_previous_event_type",
-    "structure_previous_event_direction",
-    "structure_previous_event_scope",
-    "trend_regime",
-    "trend_transition",
-    "trend_transition_direction",
-    "range_state",
-    "range_position_zone",
-    "liquidity_sweep",
-    "liquidity_sweep_direction",
-    "pullback_direction",
-    "pullback_active",
-    "pullback_depth",
-    "pullback_bars",
-    "pullback_retracement_ratio",
-    "local_sr_support",
-    "local_sr_resistance",
-    "local_sr_support_state",
-    "local_sr_resistance_state",
-    "d1_structure_direction",
-    "d1_sr_support",
-    "d1_sr_resistance",
-    "d1_sr_support_state",
-    "d1_sr_resistance_state",
-    "poi_fvg_present",
-    "poi_fvg_age_bars",
-    "poi_fvg_distance",
-    "poi_fvg_interaction",
-    "poi_fvg_lifecycle",
-    "poi_fvg_direction",
-    "poi_ob_present",
-    "poi_ob_age_bars",
-    "poi_ob_distance",
-    "poi_ob_interaction",
-    "poi_ob_lifecycle",
-    "poi_ob_direction",
-    "poi_obim_present",
-    "poi_obim_age_bars",
-    "poi_obim_distance",
-    "poi_obim_interaction",
-    "poi_obim_lifecycle",
-    "poi_obim_direction",
-    "poi_liquidity_present",
-    "poi_liquidity_age_bars",
-    "poi_liquidity_distance",
-    "poi_liquidity_interaction",
-    "poi_liquidity_lifecycle",
-    "poi_liquidity_direction",
-    "poi_sr_present",
-    "poi_sr_age_bars",
-    "poi_sr_distance",
-    "poi_sr_interaction",
-    "poi_sr_lifecycle",
-    "poi_sr_direction",
+    "structure_direction", "structure_last_event_type", "structure_last_event_direction",
+    "structure_last_event_scope", "structure_previous_event_type",
+    "structure_previous_event_direction", "structure_previous_event_scope",
+    "trend_regime", "trend_transition", "trend_transition_direction", "range_state",
+    "range_position_zone", "liquidity_sweep", "liquidity_sweep_direction",
+    "pullback_direction", "pullback_active", "pullback_depth", "pullback_bars",
+    "pullback_retracement_ratio", "local_sr_support", "local_sr_resistance",
+    "local_sr_support_state", "local_sr_resistance_state", "d1_structure_direction",
+    "d1_sr_support", "d1_sr_resistance", "d1_sr_support_state",
+    "d1_sr_resistance_state", "poi_fvg_present", "poi_fvg_age_bars",
+    "poi_fvg_distance", "poi_fvg_interaction", "poi_fvg_lifecycle", "poi_fvg_direction",
+    "poi_ob_present", "poi_ob_age_bars", "poi_ob_distance", "poi_ob_interaction",
+    "poi_ob_lifecycle", "poi_ob_direction", "poi_obim_present", "poi_obim_age_bars",
+    "poi_obim_distance", "poi_obim_interaction", "poi_obim_lifecycle", "poi_obim_direction",
+    "poi_liquidity_present", "poi_liquidity_age_bars", "poi_liquidity_distance",
+    "poi_liquidity_interaction", "poi_liquidity_lifecycle", "poi_liquidity_direction",
+    "poi_sr_present", "poi_sr_age_bars", "poi_sr_distance", "poi_sr_interaction",
+    "poi_sr_lifecycle", "poi_sr_direction",
 )
 
 
 @dataclass(frozen=True)
 class ContextSnapshot:
-    """Facts available at one setup candle."""
+    """Facts available at one setup candidate."""
 
     setup_index: int
     setup_timestamp: object
@@ -98,7 +58,6 @@ def build_context_snapshots(
 ) -> list[ContextSnapshot]:
     """Build one point-in-time context snapshot for each setup candidate."""
     features = feature_frame if feature_frame is not None else build_structural_features(frame)
-
     if len(features) != len(frame):
         raise ValueError("feature_frame must have the same length as frame.")
 
@@ -108,7 +67,11 @@ def build_context_snapshots(
             "feature_frame is missing context columns: " + ", ".join(missing)
         )
 
-    fact_context = SetupFactContext.build(swings, events) if swings is not None and events is not None else None
+    fact_context = (
+        SetupFactContext.build(swings, events)
+        if swings is not None and events is not None
+        else None
+    )
 
     snapshots: list[ContextSnapshot] = []
     for candidate in candidates:
@@ -124,7 +87,6 @@ def build_context_snapshots(
                 facts=facts,
             )
         )
-
     return snapshots
 
 
@@ -137,9 +99,10 @@ def build_context_dataset(
     events: list[StructureEvent] | None = None,
 ) -> pd.DataFrame:
     """Build a flat context dataset without outcome labels or scoring."""
-    snapshots = build_context_snapshots(frame, candidates, feature_frame, swings=swings, events=events)
+    snapshots = build_context_snapshots(
+        frame, candidates, feature_frame, swings=swings, events=events
+    )
     rows = []
-
     for snapshot in snapshots:
         row = {
             "setup_index": snapshot.setup_index,
@@ -151,7 +114,13 @@ def build_context_dataset(
 
     return pd.DataFrame(
         rows,
-        columns=["setup_index", "setup_timestamp", "direction", *CONTEXT_COLUMNS, *SETUP_FACT_COLUMNS],
+        columns=[
+            "setup_index",
+            "setup_timestamp",
+            "direction",
+            *CONTEXT_COLUMNS,
+            *SETUP_FACT_COLUMNS,
+        ],
     )
 
 
@@ -159,19 +128,21 @@ def combine_context_with_outcomes(
     context_dataset: pd.DataFrame,
     outcome_dataset: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Attach realized outcome fields to point-in-time context rows.
-
-    The context side remains as-of the setup candle; outcome columns come only
-    from the separately evaluated forward path.
-    """
-    if "setup_index" not in context_dataset.columns:
-        raise ValueError("context_dataset must contain setup_index.")
-    if "setup_index" not in outcome_dataset.columns:
-        raise ValueError("outcome_dataset must contain setup_index.")
+    """Attach realized outcome fields to point-in-time context rows."""
+    keys = ["setup_index", "direction"]
+    for name, dataset in (
+        ("context_dataset", context_dataset),
+        ("outcome_dataset", outcome_dataset),
+    ):
+        missing = sorted(set(keys) - set(dataset.columns))
+        if missing:
+            raise ValueError(
+                f"{name} is missing setup identity columns: " + ", ".join(missing)
+            )
 
     duplicate_columns = (
         set(context_dataset.columns) & set(outcome_dataset.columns)
-    ) - {"setup_index"}
+    ) - set(keys)
     if duplicate_columns:
         raise ValueError(
             "context and outcome datasets overlap on non-key columns: "
@@ -180,7 +151,7 @@ def combine_context_with_outcomes(
 
     return context_dataset.merge(
         outcome_dataset,
-        on="setup_index",
+        on=keys,
         how="inner",
         sort=False,
         validate="one_to_one",
