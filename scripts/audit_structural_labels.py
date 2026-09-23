@@ -579,7 +579,7 @@ def main() -> None:
         target_distance = labeled["target_distance"].astype(float)
         target_count = labeled["target_candidate_count"].astype(int)
         print(
-            f"  source types: {labeled["target_source_type"].value_counts().to_dict()}"
+            f"  source types: {labeled['target_source_type'].value_counts().to_dict()}"
         )
         print(f"  median target distance: {target_distance.median():.4f}")
         print(f"  p25 target distance:    {target_distance.quantile(0.25):.4f}")
@@ -597,7 +597,7 @@ def main() -> None:
                 continue
             row = grouped_rr.loc[label]
             print(
-                f"    {label:10s}: n={int(row["count"]):4d} "
+                f"    {label:10s}: n={int(row['count']):4d} "
                 f"median={row["median"]:.4f} mean={row["mean"]:.4f}"
             )
         print("  reward/risk by direction:")
@@ -607,7 +607,7 @@ def main() -> None:
                 continue
             row = direction_rr.loc[direction]
             print(
-                f"    {direction:10s}: n={int(row["count"]):4d} "
+                f"    {direction:10s}: n={int(row['count']):4d} "
                 f"median={row["median"]:.4f} mean={row["mean"]:.4f}"
             )
     print()
