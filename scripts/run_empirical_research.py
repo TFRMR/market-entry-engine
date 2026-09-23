@@ -266,6 +266,122 @@ def build_research_hypotheses(stability: pd.DataFrame) -> pd.DataFrame:
     ).reset_index(drop=True)
 
 
+
+def _hypothesis_context_columns(row: pd.Series) -> list[str]:
+    """Return the context identity columns that define one hypothesis row."""
+    return [
+        column
+        for column in CONTEXT_IDENTITY_COLUMNS
+        if pd.notna(row.get(column, pd.NA))
+    ]
+
+
+def _chronological_fold_bounds(dataset: pd.DataFrame, fold_count: int) -> list[tuple[pd.Timestamp, pd.Timestamp]]:
+    """Split observations into equal-sized chronological test periods."""
+    ordered = dataset.sort_values("setup_timestamp").reset_index(drop=True)
+    if fold_count < 2:
+        raise ValueError("fold_count must be at least 2")
+    if len(ordered) < fold_count:
+        raise ValueError("not enough observations for chronological folds")
+    timestamps = pd.to_datetime(ordered["setup_timestamp"])
+    bounds = []
+    for fold_index in range(1, fold_count):
+        start = timestamps.iloc[(len(ordered) * fold_index) // fold_count]
+        end = timestamps.iloc[(len(ordered) * (fold_index + 1)) // fold_count] if fold_index + 1 < fold_count else timestamps.iloc[-1]
+        bounds.append((start, end))
+    return bounds
+
+
+def evaluate_research_hypotheses_chronologically(
+    dataset: pd.DataFrame,
+    hypotheses: pd.DataFrame,
+    fold_count: int = 3,
+) -> pd.DataFrame:
+    """Evaluate the extracted context hypotheses on expanding chronological folds."""
+    ordered = dataset.sort_values("setup_timestamp").reset_index(drop=True)
+    timestamps = pd.to_datetime(ordered["setup_timestamp"])
+    fold_edges = [
+        timestamps.iloc[(len(ordered) * index) // fold_count]
+        for index in range(fold_count + 1)
+    ]
+    rows: list[dict[str, object]] = []
+
+    for hypothesis_index, hypothesis in hypotheses.iterrows():
+        context_columns = _hypothesis_context_columns(hypothesis)
+        family = hypothesis["context_family"]
+        mask = pd.Series(True, index=ordered.index)
+        for column in context_columns:
+            mask &= ordered[column].eq(hypothesis[column])
+        matching = ordered[mask].copy()
+        if matching.empty:
+            continue
+
+        for fold_index in range(1, fold_count + 1):
+            test_start = fold_edges[fold_index]
+            test_end = fold_edges[fold_index + 1] if fold_index < fold_count else timestamps.iloc[-1]
+            if fold_index == fold_count:
+                test_mask = timestamps.ge(test_start) & timestamps.le(test_end)
+            else:
+                test_mask = timestamps.ge(test_start) & timestamps.lt(test_end)
+            test = matching[test_mask.loc[matching.index]]
+            train = matching[timestamps.loc[matching.index] < test_start]
+
+            if train.empty or test.empty:
+                continue
+
+            train_labeled = train[train["label"].notna()]
+            test_labeled = test[test["label"].notna()]
+            if train_labeled.empty or test_labeled.empty:
+                continue
+
+            train_rate = (train_labeled["label"] == "TP_FIRST").mean()
+            test_rate = (test_labeled["label"] == "TP_FIRST").mean()
+            rows.append(
+                {
+                    "hypothesis_index": int(hypothesis_index),
+                    "context_family": family,
+                    "fold": fold_index,
+                    "train_end": test_start,
+                    "test_start": test_start,
+                    "test_end": test_end,
+                    "development_train_count": len(train_labeled),
+                    "chronological_test_count": len(test_labeled),
+                    "train_tp_first_rate": float(train_rate),
+                    "test_tp_first_rate": float(test_rate),
+                    "tp_first_rate_delta": float(test_rate - train_rate),
+                    "hypothesis_status": hypothesis["stability_status"],
+                    "uncertainty_status": hypothesis["uncertainty_status"],
+                    **{column: hypothesis[column] for column in CONTEXT_IDENTITY_COLUMNS},
+                }
+            )
+
+    result = pd.DataFrame(rows)
+    if result.empty:
+        return result
+    return result.sort_values(
+        ["hypothesis_index", "fold"]
+    ).reset_index(drop=True)
+
+
+def summarize_chronological_hypothesis_evaluation(
+    evaluation: pd.DataFrame,
+) -> pd.DataFrame:
+    """Summarize fold-level temporal drift without ranking hypotheses."""
+    if evaluation.empty:
+        return evaluation
+    return (
+        evaluation.groupby(["hypothesis_index", "context_family"], as_index=False)
+        .agg(
+            folds_evaluated=("fold", "count"),
+            median_train_count=("development_train_count", "median"),
+            median_test_count=("chronological_test_count", "median"),
+            median_abs_tp_first_delta=("tp_first_rate_delta", lambda values: values.abs().median()),
+            max_abs_tp_first_delta=("tp_first_rate_delta", lambda values: values.abs().max()),
+        )
+    )
+
+
+
 def build_stability_report(stability: pd.DataFrame) -> pd.DataFrame:
     """Summarize stability uncertainty by context family and sample-size band."""
     report = stability.copy()
@@ -461,6 +577,23 @@ def main() -> None:
         index=False,
     )
 
+    chronological_hypotheses = evaluate_research_hypotheses_chronologically(
+        dev,
+        research_hypotheses,
+        fold_count=3,
+    )
+    chronological_hypotheses.to_csv(
+        args.output_dir / "xauusd_m30_empirical_chronological_hypotheses.csv",
+        index=False,
+    )
+    chronological_summary = summarize_chronological_hypothesis_evaluation(
+        chronological_hypotheses
+    )
+    chronological_summary.to_csv(
+        args.output_dir / "xauusd_m30_empirical_chronological_hypothesis_summary.csv",
+        index=False,
+    )
+
     print("=== Empirical Research ===")
     print(f"Setup candidates: {len(candidates)}")
     print(f"Labeled context rows: {len(dataset)}")
@@ -509,6 +642,20 @@ def main() -> None:
         "uncertainty_status",
     ]
     print(research_hypotheses[hypothesis_columns].to_string(index=False))
+    print()
+    print()
+    print("Chronological hypothesis evaluation:")
+    print(
+        chronological_summary.to_string(index=False)
+        if not chronological_summary.empty
+        else "No chronological hypothesis evaluations available."
+    )
+    print()
+    print(
+        "Chronological hypothesis details: "
+        "data/research/xauusd_m30_empirical_chronological_hypotheses.csv; "
+        "summary: data/research/xauusd_m30_empirical_chronological_hypothesis_summary.csv."
+    )
     print()
     print(
         "Detailed empirical tables remain in data/research/*.csv; "
