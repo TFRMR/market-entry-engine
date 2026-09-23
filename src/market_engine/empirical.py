@@ -48,7 +48,7 @@ def summarize_outcomes(
             ]
         )
 
-    grouped = frame.groupby(list(group_columns), dropna=False, sort=False)[label_column]
+    grouped = frame.groupby(list(group_columns), dropna=False, sort=False, observed=False)[label_column]
     rows: list[dict[str, object]] = []
 
     for key, labels in grouped:
@@ -95,10 +95,12 @@ def summarize_continuous_context(
     column: str,
     *,
     label_column: str = "label",
+    bin_edges: list[float] | None = None,
 ) -> pd.DataFrame:
-    """Summarize outcomes by empirical quantile bins of one continuous fact.
+    """Summarize outcomes by fixed or fitted empirical quantile bins of one continuous fact.
 
-    Bin edges are learned from the supplied dataset only. This is descriptive
+    If bin_edges are supplied, they are reused unchanged for OOS data. Otherwise
+    edges are learned from the supplied dataset only. This is descriptive
     research output; it is not a predictive threshold or ranking.
     """
     required = {column, label_column}
@@ -117,14 +119,25 @@ def summarize_continuous_context(
             label_column=label_column,
         )
 
-    unique_count = int(frame[column].nunique())
-    bin_count = min(4, unique_count)
-    if bin_count < 2:
+    if bin_edges is None:
+        unique_count = int(frame[column].nunique())
+        bin_count = min(4, unique_count)
+        if bin_count < 2:
+            return summarize_outcomes(frame, [column], label_column=label_column)
+        _, fitted_edges = pd.qcut(
+            frame[column],
+            q=bin_count,
+            duplicates="drop",
+            retbins=True,
+        )
+        bin_edges = fitted_edges.tolist()
+
+    if len(bin_edges) < 2:
         return summarize_outcomes(frame, [column], label_column=label_column)
 
-    frame["context_bin"] = pd.qcut(
+    frame["context_bin"] = pd.cut(
         frame[column],
-        q=bin_count,
-        duplicates="drop",
+        bins=bin_edges,
+        include_lowest=True,
     )
     return summarize_outcomes(frame, ["context_bin"], label_column=label_column)
