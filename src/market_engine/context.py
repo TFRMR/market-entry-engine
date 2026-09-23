@@ -12,6 +12,8 @@ from typing import Final
 import pandas as pd
 
 from market_engine.entry import SetupCandidate
+from market_engine.setup_facts import SETUP_FACT_COLUMNS, SetupFactContext
+from market_engine.structure import StructureEvent, ValidSwing
 from market_engine.features import build_structural_features
 
 CONTEXT_COLUMNS: Final[tuple[str, ...]] = (
@@ -90,6 +92,9 @@ def build_context_snapshots(
     frame: pd.DataFrame,
     candidates: list[SetupCandidate],
     feature_frame: pd.DataFrame | None = None,
+    *,
+    swings: list[ValidSwing] | None = None,
+    events: list[StructureEvent] | None = None,
 ) -> list[ContextSnapshot]:
     """Build one point-in-time context snapshot for each setup candidate."""
     features = feature_frame if feature_frame is not None else build_structural_features(frame)
@@ -103,10 +108,14 @@ def build_context_snapshots(
             "feature_frame is missing context columns: " + ", ".join(missing)
         )
 
+    fact_context = SetupFactContext.build(swings, events) if swings is not None and events is not None else None
+
     snapshots: list[ContextSnapshot] = []
     for candidate in candidates:
         row = features.iloc[candidate.setup_index]
         facts = {column: row[column] for column in CONTEXT_COLUMNS}
+        if fact_context is not None:
+            facts.update(fact_context.facts(candidate))
         snapshots.append(
             ContextSnapshot(
                 setup_index=candidate.setup_index,
@@ -123,9 +132,12 @@ def build_context_dataset(
     frame: pd.DataFrame,
     candidates: list[SetupCandidate],
     feature_frame: pd.DataFrame | None = None,
+    *,
+    swings: list[ValidSwing] | None = None,
+    events: list[StructureEvent] | None = None,
 ) -> pd.DataFrame:
     """Build a flat context dataset without outcome labels or scoring."""
-    snapshots = build_context_snapshots(frame, candidates, feature_frame)
+    snapshots = build_context_snapshots(frame, candidates, feature_frame, swings=swings, events=events)
     rows = []
 
     for snapshot in snapshots:
@@ -139,7 +151,7 @@ def build_context_dataset(
 
     return pd.DataFrame(
         rows,
-        columns=["setup_index", "setup_timestamp", "direction", *CONTEXT_COLUMNS],
+        columns=["setup_index", "setup_timestamp", "direction", *CONTEXT_COLUMNS, *SETUP_FACT_COLUMNS],
     )
 
 
