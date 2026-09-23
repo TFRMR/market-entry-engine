@@ -300,10 +300,11 @@ def evaluate_research_hypotheses_chronologically(
     """Evaluate the extracted context hypotheses on expanding chronological folds."""
     ordered = dataset.sort_values("setup_timestamp").reset_index(drop=True)
     timestamps = pd.to_datetime(ordered["setup_timestamp"])
-    fold_edges = [
-        timestamps.iloc[(len(ordered) * index) // fold_count]
+    fold_positions = [
+        min(len(ordered) - 1, (len(ordered) * index) // fold_count)
         for index in range(fold_count + 1)
     ]
+    fold_edges = [timestamps.iloc[position] for position in fold_positions]
     rows: list[dict[str, object]] = []
 
     for hypothesis_index, hypothesis in hypotheses.iterrows():
