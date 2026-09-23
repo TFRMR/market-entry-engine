@@ -33,6 +33,11 @@ POI_INTERACTION_COLUMNS = {
     "sr": "poi_sr_interaction",
 }
 
+CONTEXT_IDENTITY_COLUMNS = [
+    *BASE_CONTEXT_COLUMNS,
+    *POI_INTERACTION_COLUMNS.values(),
+]
+
 STABILITY_MIN_DEVELOPMENT = 20
 STABILITY_MIN_HISTORICAL = 10
 STABILITY_CONFIDENCE_Z = 1.96
@@ -224,33 +229,40 @@ def build_research_hypotheses(stability: pd.DataFrame) -> pd.DataFrame:
             status = "DRIFT_REQUIRES_RETEST"
             rationale = "observed drift is material enough to require additional chronological validation"
         uncertainty = "CI_CROSSES_ZERO" if ci_low <= 0.0 <= ci_high else "CI_EXCLUDES_ZERO"
-        rows.append(
-            {
-                "context_family": row["context_family"],
-                "sample_band": (
-                    "10-19" if min_n < 20 else
-                    "20-49" if min_n < 50 else
-                    "50-99" if min_n < 100 else
-                    "100-249" if min_n < 250 else "250+"
-                ),
-                "development_count": dev_n,
-                "historical_count": hist_n,
-                "tp_first_development_rate": float(row["development_tp_first_rate"]),
-                "tp_first_historical_rate": float(row["historical_tp_first_rate"]),
-                "tp_first_rate_delta": delta,
-                "tp_first_abs_delta": abs_delta,
-                "tp_first_delta_ci_low": ci_low,
-                "tp_first_delta_ci_high": ci_high,
-                "tp_first_drift_p_value": float(row["tp_first_drift_p_value"]),
-                "stability_status": status,
-                "uncertainty_status": uncertainty,
-                "hypothesis": "TP_FIRST outcome distribution remains temporally similar for this context definition",
-                "rationale": rationale,
-            }
-        )
-    return pd.DataFrame(rows).sort_values(
-        ["stability_status", "context_family", "historical_count"],
-        ascending=[True, True, False],
+
+        hypothesis = {
+            "context_family": row["context_family"],
+            "sample_band": (
+                "10-19" if min_n < 20 else
+                "20-49" if min_n < 50 else
+                "50-99" if min_n < 100 else
+                "100-249" if min_n < 250 else "250+"
+            ),
+            "development_count": dev_n,
+            "historical_count": hist_n,
+            "tp_first_development_rate": float(row["development_tp_first_rate"]),
+            "tp_first_historical_rate": float(row["historical_tp_first_rate"]),
+            "tp_first_rate_delta": delta,
+            "tp_first_abs_delta": abs_delta,
+            "tp_first_delta_ci_low": ci_low,
+            "tp_first_delta_ci_high": ci_high,
+            "tp_first_drift_p_value": float(row["tp_first_drift_p_value"]),
+            "stability_status": status,
+            "uncertainty_status": uncertainty,
+            "hypothesis": "TP_FIRST outcome distribution remains temporally similar for this context definition",
+            "rationale": rationale,
+        }
+        for column in CONTEXT_IDENTITY_COLUMNS:
+            hypothesis[column] = row[column] if column in row.index else pd.NA
+        rows.append(hypothesis)
+
+    result = pd.DataFrame(rows)
+    if result.empty:
+        return result
+    return result.sort_values(
+        ["stability_status", "context_family", "historical_count", *CONTEXT_IDENTITY_COLUMNS],
+        ascending=[True, True, False, *([True] * len(CONTEXT_IDENTITY_COLUMNS))],
+        na_position="last",
     ).reset_index(drop=True)
 
 
@@ -293,72 +305,23 @@ def build_stability_dataset(
 ) -> pd.DataFrame:
     """Build chronological stability views without ranking or scoring contexts."""
     views = [
-        (
-            "base_context",
-            BASE_CONTEXT_COLUMNS,
-        ),
-        (
-            "base_plus_one_poi",
-            [*BASE_CONTEXT_COLUMNS, "poi_fvg_interaction"],
-        ),
-        (
-            "base_plus_one_poi",
-            [*BASE_CONTEXT_COLUMNS, "poi_ob_interaction"],
-        ),
-        (
-            "base_plus_one_poi",
-            [*BASE_CONTEXT_COLUMNS, "poi_obim_interaction"],
-        ),
-        (
-            "base_plus_one_poi",
-            [*BASE_CONTEXT_COLUMNS, "poi_liquidity_interaction"],
-        ),
-        (
-            "base_plus_one_poi",
-            [*BASE_CONTEXT_COLUMNS, "poi_sr_interaction"],
-        ),
-        (
-            "poi_pair",
-            ["poi_fvg_interaction", "poi_ob_interaction"],
-        ),
-        (
-            "poi_pair",
-            ["poi_fvg_interaction", "poi_obim_interaction"],
-        ),
-        (
-            "poi_pair",
-            ["poi_fvg_interaction", "poi_liquidity_interaction"],
-        ),
-        (
-            "poi_pair",
-            ["poi_fvg_interaction", "poi_sr_interaction"],
-        ),
-        (
-            "poi_pair",
-            ["poi_ob_interaction", "poi_obim_interaction"],
-        ),
-        (
-            "poi_pair",
-            ["poi_ob_interaction", "poi_liquidity_interaction"],
-        ),
-        (
-            "poi_pair",
-            ["poi_ob_interaction", "poi_sr_interaction"],
-        ),
-        (
-            "poi_pair",
-            ["poi_obim_interaction", "poi_liquidity_interaction"],
-        ),
-        (
-            "poi_pair",
-            ["poi_obim_interaction", "poi_sr_interaction"],
-        ),
-        (
-            "poi_pair",
-            ["poi_liquidity_interaction", "poi_sr_interaction"],
-        ),
+        ("base_context", BASE_CONTEXT_COLUMNS),
+        ("base_plus_one_poi", [*BASE_CONTEXT_COLUMNS, "poi_fvg_interaction"]),
+        ("base_plus_one_poi", [*BASE_CONTEXT_COLUMNS, "poi_ob_interaction"]),
+        ("base_plus_one_poi", [*BASE_CONTEXT_COLUMNS, "poi_obim_interaction"]),
+        ("base_plus_one_poi", [*BASE_CONTEXT_COLUMNS, "poi_liquidity_interaction"]),
+        ("base_plus_one_poi", [*BASE_CONTEXT_COLUMNS, "poi_sr_interaction"]),
+        ("poi_pair", ["poi_fvg_interaction", "poi_ob_interaction"]),
+        ("poi_pair", ["poi_fvg_interaction", "poi_obim_interaction"]),
+        ("poi_pair", ["poi_fvg_interaction", "poi_liquidity_interaction"]),
+        ("poi_pair", ["poi_fvg_interaction", "poi_sr_interaction"]),
+        ("poi_pair", ["poi_ob_interaction", "poi_obim_interaction"]),
+        ("poi_pair", ["poi_ob_interaction", "poi_liquidity_interaction"]),
+        ("poi_pair", ["poi_ob_interaction", "poi_sr_interaction"]),
+        ("poi_pair", ["poi_obim_interaction", "poi_liquidity_interaction"]),
+        ("poi_pair", ["poi_obim_interaction", "poi_sr_interaction"]),
+        ("poi_pair", ["poi_liquidity_interaction", "poi_sr_interaction"]),
     ]
-
     parts = [
         build_stability_summary(development, historical, group_by, family)
         for family, group_by in views
@@ -534,20 +497,18 @@ def main() -> None:
     print()
     print()
     print("Research hypotheses:")
-    print(
-        research_hypotheses[
-            [
-                "context_family",
-                "development_count",
-                "historical_count",
-                "tp_first_rate_delta",
-                "tp_first_delta_ci_low",
-                "tp_first_delta_ci_high",
-                "stability_status",
-                "uncertainty_status",
-            ]
-        ].to_string(index=False)
-    )
+    hypothesis_columns = [
+        "context_family",
+        *CONTEXT_IDENTITY_COLUMNS,
+        "development_count",
+        "historical_count",
+        "tp_first_rate_delta",
+        "tp_first_delta_ci_low",
+        "tp_first_delta_ci_high",
+        "stability_status",
+        "uncertainty_status",
+    ]
+    print(research_hypotheses[hypothesis_columns].to_string(index=False))
     print()
     print(
         "Detailed empirical tables remain in data/research/*.csv; "
