@@ -386,3 +386,37 @@ def test_empirical_summary_reports_observed_distribution_without_ranking():
     assert up_tested["sl_first_rate"] == 0.5
     assert "score" not in result.columns
     assert "rank" not in result.columns
+
+
+def test_context_can_include_setup_facts():
+    from market_engine.context import build_context_dataset
+    from market_engine.structure import Direction, StructureEvent, StructureScope, SwingType, ValidSwing
+
+    frame = pd.DataFrame({
+        "timestamp": pd.to_datetime(["2026-01-01", "2026-01-02"]),
+        "open": [100.0, 101.0],
+        "high": [101.0, 103.0],
+        "low": [99.0, 100.0],
+        "close": [100.5, 102.0],
+    })
+    features = pd.DataFrame({
+        column: [None, f"{column}-setup"] for column in __import__("market_engine.context", fromlist=["CONTEXT_COLUMNS"]).CONTEXT_COLUMNS
+    })
+    candidate = __import__("market_engine.entry", fromlist=["SetupCandidate"]).SetupCandidate(
+        setup_index=1,
+        setup_timestamp=frame.iloc[1]["timestamp"],
+        direction=Direction.UP,
+        entry_index=1,
+        entry_timestamp=frame.iloc[1]["timestamp"],
+        entry_price=101.0,
+        invalidation_price=99.0,
+        risk=2.0,
+        invalidation_swing_index=0,
+    )
+    swing = ValidSwing(0, 100.0, SwingType.LOW, 0, 0, "LL", StructureScope.EXTERNAL)
+    event = StructureEvent(1, frame.iloc[1]["timestamp"], "BULLISH_BOS", Direction.UP, 0, StructureScope.EXTERNAL)
+
+    result = build_context_dataset(frame, [candidate], features, swings=[swing], events=[event])
+
+    assert "setup_bos_external" in result.columns
+    assert result.loc[0, "setup_bos_external"] == 1.0
