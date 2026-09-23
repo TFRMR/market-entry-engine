@@ -1,11 +1,10 @@
 """Simple trend + valid swing + POI research with fixed 1:2 RR.
 
-Research scenario:
-    structure trend agrees with setup direction
-    + at least one POI exists at setup
-    + entry after the structural setup
-    + SL = structural invalidation
-    + TP = 2R
+The scenario stays intentionally simple:
+    Trend + Valid Swing + POI + SL = 1R + TP = 2R
+
+Only the holding horizon is swept so we can distinguish a target-distance
+problem from a scenario problem.
 """
 
 from __future__ import annotations
@@ -30,7 +29,7 @@ from market_engine.features import build_structural_features
 from market_engine.exits import ExitArea
 
 
-HORIZON = 10
+HORIZONS = (10, 20, 40, 80)
 REWARD_RISK = 2.0
 
 POI_COLUMNS = (
@@ -55,7 +54,7 @@ def has_poi(row: pd.Series) -> bool:
     return any(float(row[column]) > 0 for column in POI_COLUMNS)
 
 
-def evaluate_fixed_rr(candidate, frame: pd.DataFrame) -> TradeOutcome:
+def evaluate_fixed_rr(candidate, frame: pd.DataFrame, horizon: int) -> TradeOutcome:
     execution = execute_entry(
         direction=candidate.direction,
         quoted_price=float(candidate.entry_price),
@@ -81,7 +80,7 @@ def evaluate_fixed_rr(candidate, frame: pd.DataFrame) -> TradeOutcome:
         execution=execution,
         target=target,
         frame=frame,
-        horizon=HORIZON,
+        horizon=horizon,
     )
 
 
@@ -110,41 +109,44 @@ def build_simple_dataset(frame: pd.DataFrame) -> pd.DataFrame:
             continue
 
         candidate = candidate_by_key[(int(row["setup_index"]), row["direction"])]
-        if candidate.setup_index + HORIZON >= len(frame):
-            continue
 
-        outcome = evaluate_fixed_rr(candidate, frame)
-        if outcome.status == "TARGET":
-            label = "TP_2R"
-        elif outcome.status == "STOP":
-            label = "SL_1R"
-        else:
-            label = "UNRESOLVED"
+        for horizon in HORIZONS:
+            if candidate.setup_index + horizon >= len(frame):
+                continue
 
-        poi_names = [
-            name
-            for name, column in zip(
-                ("FVG", "OB", "OBIM", "LIQUIDITY", "SR"),
-                POI_COLUMNS,
+            outcome = evaluate_fixed_rr(candidate, frame, horizon)
+            if outcome.status == "TARGET":
+                label = "TP_2R"
+            elif outcome.status == "STOP":
+                label = "SL_1R"
+            else:
+                label = "UNRESOLVED"
+
+            poi_names = [
+                name
+                for name, column in zip(
+                    ("FVG", "OB", "OBIM", "LIQUIDITY", "SR"),
+                    POI_COLUMNS,
+                )
+                if float(row[column]) > 0
+            ]
+
+            rows.append(
+                {
+                    "setup_index": candidate.setup_index,
+                    "setup_timestamp": candidate.setup_timestamp,
+                    "direction": candidate.direction.value,
+                    "trend": row["trend_regime"],
+                    "poi": "+".join(poi_names),
+                    "horizon": horizon,
+                    "entry_price": float(candidate.entry_price),
+                    "invalidation_price": float(candidate.invalidation_price),
+                    "risk": float(abs(candidate.entry_price - candidate.invalidation_price)),
+                    "target_price": float(outcome.target_price),
+                    "label": label,
+                    "ambiguous_barrier": outcome.both_hit,
+                }
             )
-            if float(row[column]) > 0
-        ]
-
-        rows.append(
-            {
-                "setup_index": candidate.setup_index,
-                "setup_timestamp": candidate.setup_timestamp,
-                "direction": candidate.direction.value,
-                "trend": row["trend_regime"],
-                "poi": "+".join(poi_names),
-                "entry_price": float(candidate.entry_price),
-                "invalidation_price": float(candidate.invalidation_price),
-                "risk": float(abs(candidate.entry_price - candidate.invalidation_price)),
-                "target_price": float(outcome.target_price),
-                "label": label,
-                "ambiguous_barrier": outcome.both_hit,
-            }
-        )
 
     return pd.DataFrame(rows)
 
@@ -152,9 +154,17 @@ def build_simple_dataset(frame: pd.DataFrame) -> pd.DataFrame:
 def summarize(dataset: pd.DataFrame, name: str) -> pd.DataFrame:
     if dataset.empty:
         return pd.DataFrame(
-            [{"scenario": name, "sample": 0, "tp_2r": 0, "sl_1r": 0, "unresolved": 0,
-              "tp_rate": float("nan"), "sl_rate": float("nan"),
-              "expectancy_r": float("nan")}]
+            [{
+                "scenario": name,
+                "sample": 0,
+                "tp_2r": 0,
+                "sl_1r": 0,
+                "unresolved": 0,
+                "ambiguous": 0,
+                "tp_rate": float("nan"),
+                "sl_rate": float("nan"),
+                "expectancy_r": float("nan"),
+            }]
         )
 
     tp = int((dataset["label"] == "TP_2R").sum())
@@ -163,7 +173,7 @@ def summarize(dataset: pd.DataFrame, name: str) -> pd.DataFrame:
     ambiguous = int(dataset["ambiguous_barrier"].sum())
     sample = len(dataset)
 
-    # Unresolved contributes 0R for the simple research expectancy.
+    # Unresolved contributes 0R for this simple research comparison.
     expectancy = (tp * REWARD_RISK - sl) / sample
 
     return pd.DataFrame(
@@ -187,7 +197,7 @@ def main() -> None:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("data/research/xauusd_m30_simple_trend_swing_poi_2r.csv"),
+        default=Path("data/research/xauusd_m30_simple_trend_swing_poi_2r_horizons.csv"),
     )
     args = parser.parse_args()
 
@@ -201,31 +211,44 @@ def main() -> None:
         dataset["setup_timestamp"] >= HISTORICAL_AUDIT_CUTOFF
     ].copy()
 
-    summary = pd.concat(
-        [
-            summarize(development, "development"),
-            summarize(historical, "historical_oos"),
-        ],
-        ignore_index=True,
-    )
+    summary_frames = []
+    for horizon in HORIZONS:
+        summary_frames.append(
+            summarize(
+                development[development["horizon"] == horizon],
+                f"development_h{horizon}",
+            )
+        )
+        summary_frames.append(
+            summarize(
+                historical[historical["horizon"] == horizon],
+                f"historical_oos_h{horizon}",
+            )
+        )
+
+    summary = pd.concat(summary_frames, ignore_index=True)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     dataset.to_csv(args.output, index=False)
 
-    print("=== Simple Trend + Valid Swing + POI / RR 1:2 ===")
-    print(f"All matching setups: {len(dataset)}")
+    print("=== Simple Trend + Valid Swing + POI / RR 1:2 / Horizon Sweep ===")
+    print(f"Horizons: {', '.join(map(str, HORIZONS))}")
+    print(f"Matching setups: {dataset['setup_index'].nunique() if not dataset.empty else 0}")
     print()
     print(summary.to_string(index=False))
 
     print()
-    print("By direction:")
+    print("By horizon / direction:")
     if dataset.empty:
         print("No matching setups.")
     else:
         by_direction = (
-            dataset.groupby("direction", as_index=False)
+            dataset.groupby(["horizon", "direction"], as_index=False)
             .apply(
-                lambda group: summarize(group, group.name),
+                lambda group: summarize(
+                    group,
+                    f"h{int(group['horizon'].iloc[0])}_{group['direction'].iloc[0]}",
+                ),
                 include_groups=False,
             )
             .reset_index(drop=True)
@@ -238,3 +261,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+"
