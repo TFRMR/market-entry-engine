@@ -49,10 +49,9 @@ def main() -> None:
         events=events,
     )
 
-    # Labels already contain setup metadata; retain only outcome fields here
-    # before joining so the context side remains the canonical setup snapshot.
     outcome_columns = [
         "setup_index",
+        "direction",
         "label",
         "reward_risk",
         "ambiguous_barrier",
@@ -65,7 +64,7 @@ def main() -> None:
 
     dataset = context.merge(
         outcomes,
-        on="setup_index",
+        on=["setup_index", "direction"],
         how="inner",
         validate="one_to_one",
         sort=False,
