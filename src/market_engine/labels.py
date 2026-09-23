@@ -125,6 +125,11 @@ def build_setup_label_dataset(
             "invalidation_price": execution.invalidation_price,
             "risk": execution.risk,
             "target_price": exit_areas[0].price,
+            "target_source_type": exit_areas[0].source_type,
+            "target_source_index": exit_areas[0].source_index,
+            "target_confirmation_index": exit_areas[0].source_confirmation_index,
+            "target_distance": exit_areas[0].distance,
+            "target_candidate_count": len(exit_areas),
             "reward_risk": (
                 abs(float(exit_areas[0].price) - execution.entry_price) / execution.risk
             ),
@@ -158,6 +163,11 @@ def build_setup_label_dataset(
         "invalidation_price",
         "risk",
         "target_price",
+        "target_source_type",
+        "target_source_index",
+        "target_confirmation_index",
+        "target_distance",
+        "target_candidate_count",
         "reward_risk",
         "ambiguous_barrier",
         "label",
