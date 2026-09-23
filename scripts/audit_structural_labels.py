@@ -572,6 +572,45 @@ def main() -> None:
         print(f"  p25:    {rr.quantile(0.25):.4f}")
         print(f"  p75:    {rr.quantile(0.75):.4f}")
     print()
+    print("Target construction:")
+    if labeled.empty:
+        print("  No labeled setups.")
+    else:
+        target_distance = labeled["target_distance"].astype(float)
+        target_count = labeled["target_candidate_count"].astype(int)
+        print(
+            f"  source types: {labeled["target_source_type"].value_counts().to_dict()}"
+        )
+        print(f"  median target distance: {target_distance.median():.4f}")
+        print(f"  p25 target distance:    {target_distance.quantile(0.25):.4f}")
+        print(f"  p75 target distance:    {target_distance.quantile(0.75):.4f}")
+        print(
+            "  candidate exits per setup: "
+            f"median={target_count.median():.0f} "
+            f"p25={target_count.quantile(0.25):.0f} "
+            f"p75={target_count.quantile(0.75):.0f}"
+        )
+        print("  reward/risk by label:")
+        grouped_rr = labeled.groupby("label")["reward_risk"].agg(["count", "median", "mean"])
+        for label in ("TP_FIRST", "SL_FIRST", "UNRESOLVED"):
+            if label not in grouped_rr.index:
+                continue
+            row = grouped_rr.loc[label]
+            print(
+                f"    {label:10s}: n={int(row["count"]):4d} "
+                f"median={row["median"]:.4f} mean={row["mean"]:.4f}"
+            )
+        print("  reward/risk by direction:")
+        direction_rr = labeled.groupby("direction")["reward_risk"].agg(["count", "median", "mean"])
+        for direction in ("UP", "DOWN"):
+            if direction not in direction_rr.index:
+                continue
+            row = direction_rr.loc[direction]
+            print(
+                f"    {direction:10s}: n={int(row["count"]):4d} "
+                f"median={row["median"]:.4f} mean={row["mean"]:.4f}"
+            )
+    print()
     print("Ambiguous barrier:")
     ambiguous = int(labeled["ambiguous_barrier"].sum())
     percentage = ambiguous / len(labeled) * 100 if len(labeled) else 0.0
