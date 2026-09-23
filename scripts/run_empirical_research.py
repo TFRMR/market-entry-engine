@@ -88,6 +88,31 @@ def main() -> None:
     )
     continuous.to_csv(args.output_dir / "xauusd_m30_empirical_retracement.csv", index=False)
 
+    retracement_values = pd.to_numeric(dev["pullback_retracement_ratio"], errors="coerce").dropna()
+    _, retracement_edges = pd.qcut(
+        retracement_values,
+        q=min(4, int(retracement_values.nunique())),
+        duplicates="drop",
+        retbins=True,
+    )
+    historical_categorical = summarize_outcomes(
+        historical,
+        ["direction", "structure_direction", "trend_regime", "range_position_zone"],
+    )
+    historical_categorical.to_csv(
+        args.output_dir / "xauusd_m30_empirical_historical_categorical.csv",
+        index=False,
+    )
+    historical_continuous = summarize_continuous_context(
+        historical,
+        "pullback_retracement_ratio",
+        bin_edges=retracement_edges.tolist(),
+    )
+    historical_continuous.to_csv(
+        args.output_dir / "xauusd_m30_empirical_historical_retracement.csv",
+        index=False,
+    )
+
     print("=== Empirical Research ===")
     print(f"Setup candidates: {len(candidates)}")
     print(f"Labeled context rows: {len(dataset)}")
@@ -97,8 +122,14 @@ def main() -> None:
     print("Categorical context distribution:")
     print(categorical.to_string(index=False))
     print()
-    print("Pullback retracement distribution:")
+    print("Pullback retracement distribution (development bins):")
     print(continuous.to_string(index=False))
+    print()
+    print("Historical/OOS categorical distribution:")
+    print(historical_categorical.to_string(index=False))
+    print()
+    print("Historical/OOS pullback retracement distribution (same development bins):")
+    print(historical_continuous.to_string(index=False))
 
 
 if __name__ == "__main__":
