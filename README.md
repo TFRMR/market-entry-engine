@@ -200,6 +200,18 @@ The empirical layer is descriptive. It reports sample counts and observed outcom
 
 The first runner now validates the same categorical context definitions on the later historical/OOS sample. Continuous retracement bins are fitted on development data and reused unchanged on the historical sample, so the OOS pass does not relearn thresholds from the validation period.
 
+Current M30 empirical checkpoint:
+
+- 1,772 setup candidates
+- 1,706 labeled context rows
+- 1,279 development rows
+- 427 later historical/OOS rows
+- categorical context combinations are evaluated on both development and historical/OOS data using the same context definitions
+- pullback retracement bins are fitted on development and reused unchanged for OOS
+- POI interaction combinations now cover FVG, Order Block, OBIM, liquidity, and structural S/R
+
+The current result is still descriptive research. Differences between development and historical distributions are treated as validation evidence, not as a ranking or trading rule. The next research step is broader multi-dimensional context analysis with minimum-sample visibility and chronological stability checks.
+
 Development and later historical observations remain distinguishable. A context that appears interesting in development data is a research hypothesis until its observed distribution is checked chronologically on later data.
 
 ## Structural / S/R Semantics
