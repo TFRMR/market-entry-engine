@@ -234,6 +234,44 @@ def evaluate_oos_feature_ablation(development: pd.DataFrame, historical_audit: p
         print(f"  Remove {removed_group:<10} features={len(columns):>2} ROC-AUC={roc_auc_score(oos['target'], probability):.4f} log_loss={oos_loss:.4f} vs_baseline={oos_loss - baseline_loss:+.4f}")
 
 
+def evaluate_oos_individual_ablation(development: pd.DataFrame, historical_audit: pd.DataFrame) -> None:
+    development_binary = development.loc[development["label"].isin(["TP_FIRST", "SL_FIRST"])].copy()
+    oos = historical_audit.loc[historical_audit["label"].isin(["TP_FIRST", "SL_FIRST"])].copy()
+    development_binary["target"] = (development_binary["label"] == "TP_FIRST").astype("int8")
+    oos["target"] = (oos["label"] == "TP_FIRST").astype("int8")
+    X_development_full = prepare_features(development_binary)
+    X_oos_full = prepare_features(oos)
+    model_columns, _, _ = select_model_features(X_development_full)
+    base_rate = float(development_binary["target"].mean())
+    baseline_loss = log_loss(oos["target"], [base_rate] * len(oos))
+    groups = {
+        "structure": FEATURE_GROUPS["structure"],
+        "liquidity": FEATURE_GROUPS["liquidity"],
+    }
+    print()
+    print("Pristine OOS individual-feature ablation (structure + liquidity):")
+    print("  Remove one feature at a time, retrain on full development, evaluate on the same OOS.")
+    for group_name, group_columns in groups.items():
+        print(f"  {group_name}:")
+        for removed_column in group_columns:
+            columns = [column for column in model_columns if column != removed_column]
+            X_development = X_development_full[columns]
+            X_oos = X_oos_full[columns].copy()
+            for column in CATEGORICAL_COLUMNS:
+                if column in columns:
+                    X_oos.loc[:, column] = X_oos[column].cat.set_categories(X_development[column].cat.categories)
+            model = make_model()
+            model.fit(
+                X_development,
+                development_binary["target"],
+                categorical_feature=[column for column in CATEGORICAL_COLUMNS if column in columns],
+            )
+            probability = model.predict_proba(X_oos)[:, 1]
+            oos_auc = roc_auc_score(oos["target"], probability)
+            oos_loss = log_loss(oos["target"], probability)
+            print(f"    Remove {removed_column:<40} ROC-AUC={oos_auc:.4f} log_loss={oos_loss:.4f} vs_baseline={oos_loss - baseline_loss:+.4f}")
+
+
 def main() -> None:
     print("=== Canonical Structural LightGBM Baseline ===")
     frame = load_mt5_csv(INPUT_PATH)
