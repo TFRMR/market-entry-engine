@@ -584,7 +584,8 @@ def build_structural_features(frame: pd.DataFrame) -> pd.DataFrame:
     result = add_trend_range_features(result)
     result = add_liquidity_features(result)
     result = add_order_block_features(result)
-    return add_sr_location_features(result)
+    result = add_sr_location_features(result)
+    return add_pullback_features(result)
 
 
 def add_structure_event_features(frame: pd.DataFrame) -> pd.DataFrame:
@@ -1142,6 +1143,35 @@ def add_pullback_features(frame: pd.DataFrame) -> pd.DataFrame:
 
     result["pullback_bars"] = pd.Series(
         bars,
+        index=result.index,
+    )
+
+    # Continuous retracement measurement. The denominator is the completed
+    # structural leg from the last confirmed opposite swing to the active
+    # extreme, so Fibonacci levels remain measurements rather than rules.
+    retracement_ratio = np.full(size, np.nan)
+    for snapshot in snapshots:
+        position = snapshot.index
+        if snapshot.pullback is None:
+            continue
+
+        pullback = snapshot.pullback
+        if pullback.direction is Direction.UP and snapshot.last_low is not None:
+            leg_size = pullback.extreme_price - snapshot.last_low.price
+            if leg_size > 0:
+                retracement_ratio[position] = (
+                    pullback.extreme_price - pullback.price
+                ) / leg_size
+        elif pullback.direction is Direction.DOWN and snapshot.last_high is not None:
+            leg_size = snapshot.last_high.price - pullback.extreme_price
+            if leg_size > 0:
+                retracement_ratio[position] = (
+                    pullback.price - pullback.extreme_price
+                ) / leg_size
+
+    retracement_ratio = carry(retracement_ratio)
+    result["pullback_retracement_ratio"] = pd.Series(
+        retracement_ratio,
         index=result.index,
     )
 
