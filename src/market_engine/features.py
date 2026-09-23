@@ -6,6 +6,15 @@ import numpy as np
 import pandas as pd
 
 from market_engine.order_block import find_order_block_candidates
+from market_engine.poi import (
+    POILifecycle,
+    POIType,
+    PriceInteraction,
+    build_inducement_events,
+    build_poi_records,
+    classify_poi_interaction,
+    lifecycle_after_interaction,
+)
 from market_engine.structure import (
     Direction,
     StructureScope,
@@ -190,6 +199,108 @@ def add_order_block_features(frame: pd.DataFrame) -> pd.DataFrame:
                 position,
                 result.columns.get_loc(f"ob_{direction}_relative_position"),
             ] = relative_position
+
+    return result
+
+
+def add_poi_features(frame: pd.DataFrame) -> pd.DataFrame:
+    """Add deterministic inducement, OBIM, POI lifecycle, and interaction context."""
+    required = {"high", "low", "close"}
+    missing = required.difference(frame.columns)
+    if missing:
+        raise ValueError(
+            "Missing POI feature columns: " + ", ".join(sorted(missing))
+        )
+
+    result = frame.copy()
+    structural = build_structural_sequence(result)
+    swings, events = process_structural_candles(structural)
+    order_blocks = find_order_block_candidates(swings, events)
+    inducements = build_inducement_events(swings, result)
+    pois = build_poi_records(result, swings, events, order_blocks)
+
+    size = len(result)
+    result["inducement"] = 0
+    result["inducement_direction"] = "NONE"
+    result["inducement_swing_index"] = np.nan
+
+    for event in inducements:
+        result.loc[event.index, "inducement"] = 1
+        result.loc[event.index, "inducement_direction"] = event.direction.value
+        result.loc[event.index, "inducement_swing_index"] = event.swing_index
+
+    # Keep one deterministic active reference per POI type: the latest
+    # created object whose lifecycle has not been broken.
+    latest: dict[POIType, object] = {}
+    lifecycle: dict[tuple[POIType, int, int | None], POILifecycle] = {}
+
+    type_names = {
+        POIType.FVG: "fvg",
+        POIType.ORDER_BLOCK: "ob",
+        POIType.OBIM: "obim",
+        POIType.LIQUIDITY: "liquidity",
+        POIType.STRUCTURAL_SR: "sr",
+    }
+
+    for poi_type, name in type_names.items():
+        result[f"poi_{name}_present"] = 0
+        result[f"poi_{name}_age_bars"] = np.nan
+        result[f"poi_{name}_distance"] = np.nan
+        result[f"poi_{name}_interaction"] = "NONE"
+        result[f"poi_{name}_lifecycle"] = "NONE"
+        result[f"poi_{name}_direction"] = "NONE"
+
+    pois_by_creation: dict[int, list] = {}
+    for poi in pois:
+        pois_by_creation.setdefault(poi.created_index, []).append(poi)
+
+    for position in range(size):
+        for poi in pois_by_creation.get(position, []):
+            key = (poi.poi_type, poi.created_index, poi.source_index)
+            lifecycle[key] = POILifecycle.CREATED
+            latest[poi.poi_type] = poi
+
+        high = float(result.iloc[position]["high"])
+        low = float(result.iloc[position]["low"])
+        close = float(result.iloc[position]["close"])
+
+        for poi_type, poi in list(latest.items()):
+            key = (poi.poi_type, poi.created_index, poi.source_index)
+            previous = lifecycle.get(key, POILifecycle.CREATED)
+
+            if position > poi.created_index:
+                interaction = classify_poi_interaction(
+                    poi, high=high, low=low, close=close
+                )
+                current = lifecycle_after_interaction(previous, interaction)
+                lifecycle[key] = current
+            else:
+                interaction = PriceInteraction.NONE
+                current = previous
+
+            if current is POILifecycle.BROKEN:
+                # Keep the broken object observable on this candle, then do not
+                # carry it as the active reference into later candles.
+                pass
+
+            result.loc[position, f"poi_{type_names[poi.poi_type]}_present"] = 1
+            result.loc[position, f"poi_{type_names[poi.poi_type]}_age_bars"] = (
+                position - poi.created_index
+            )
+            distance = (
+                0.0
+                if poi.low <= close <= poi.high
+                else min(abs(close - poi.low), abs(close - poi.high))
+            )
+            result.loc[position, f"poi_{type_names[poi.poi_type]}_distance"] = distance
+            result.loc[position, f"poi_{type_names[poi.poi_type]}_interaction"] = interaction.value
+            result.loc[position, f"poi_{type_names[poi.poi_type]}_lifecycle"] = current.value
+            result.loc[position, f"poi_{type_names[poi.poi_type]}_direction"] = (
+                poi.direction.value if poi.direction is not None else "NONE"
+            )
+
+            if current is POILifecycle.BROKEN:
+                latest.pop(poi_type, None)
 
     return result
 
@@ -570,6 +681,7 @@ def build_features(frame: pd.DataFrame) -> pd.DataFrame:
     result = add_liquidity_features(result)
     result = add_order_block_features(result)
     result = add_sr_location_features(result)
+    result = add_poi_features(result)
     result = add_pullback_features(result)
     return result
 
@@ -585,6 +697,7 @@ def build_structural_features(frame: pd.DataFrame) -> pd.DataFrame:
     result = add_liquidity_features(result)
     result = add_order_block_features(result)
     result = add_sr_location_features(result)
+    result = add_poi_features(result)
     return add_pullback_features(result)
 
 
