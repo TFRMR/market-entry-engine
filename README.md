@@ -203,6 +203,8 @@ The empirical layer is descriptive. It reports sample counts and observed outcom
 
 The stability output is `data/research/xauusd_m30_empirical_stability.csv`. It matches identical context definitions across development and later historical/OOS data, keeping groups with at least 20 development observations and 10 historical observations. It reports observed outcome-rate deltas without ranking or scoring contexts.
 
+Stability statistics now include 95% Wilson confidence intervals for development and historical TP_FIRST / UNRESOLVED rates, approximate 95% confidence intervals for development-to-historical rate deltas, and standardized drift statistics (z and two-sided normal p-value) for TP_FIRST and UNRESOLVED. These statistics describe sampling uncertainty and distribution drift; they are not used as a ranking score or trading threshold.
+
 The first runner now validates the same categorical context definitions on the later historical/OOS sample. Continuous retracement bins are fitted on development data and reused unchanged on the historical sample, so the OOS pass does not relearn thresholds from the validation period.
 
 Current M30 empirical checkpoint:
