@@ -200,6 +200,60 @@ def build_stability_summary(
     return merged
 
 
+def build_research_hypotheses(stability: pd.DataFrame) -> pd.DataFrame:
+    """Extract descriptive, testable research hypotheses from stability results."""
+    rows: list[dict[str, object]] = []
+    for _, row in stability.iterrows():
+        dev_n = int(row["development_count"])
+        hist_n = int(row["historical_count"])
+        min_n = min(dev_n, hist_n)
+        delta = float(row["tp_first_rate_delta"])
+        ci_low = float(row["tp_first_rate_delta_ci_low"])
+        ci_high = float(row["tp_first_rate_delta_ci_high"])
+        abs_delta = abs(delta)
+        if min_n >= 100 and abs_delta <= 0.05:
+            status = "STABLE_BASELINE"
+            rationale = "large matched sample with small observed TP_FIRST drift"
+        elif min_n >= 50 and abs_delta <= 0.10:
+            status = "STABLE_CANDIDATE"
+            rationale = "moderate matched sample with limited observed drift"
+        elif min_n < 50:
+            status = "LOW_SAMPLE"
+            rationale = "historical sample is still small for a strong stability conclusion"
+        else:
+            status = "DRIFT_REQUIRES_RETEST"
+            rationale = "observed drift is material enough to require additional chronological validation"
+        uncertainty = "CI_CROSSES_ZERO" if ci_low <= 0.0 <= ci_high else "CI_EXCLUDES_ZERO"
+        rows.append(
+            {
+                "context_family": row["context_family"],
+                "sample_band": (
+                    "10-19" if min_n < 20 else
+                    "20-49" if min_n < 50 else
+                    "50-99" if min_n < 100 else
+                    "100-249" if min_n < 250 else "250+"
+                ),
+                "development_count": dev_n,
+                "historical_count": hist_n,
+                "tp_first_development_rate": float(row["development_tp_first_rate"]),
+                "tp_first_historical_rate": float(row["historical_tp_first_rate"]),
+                "tp_first_rate_delta": delta,
+                "tp_first_abs_delta": abs_delta,
+                "tp_first_delta_ci_low": ci_low,
+                "tp_first_delta_ci_high": ci_high,
+                "tp_first_drift_p_value": float(row["tp_first_drift_p_value"]),
+                "stability_status": status,
+                "uncertainty_status": uncertainty,
+                "hypothesis": "TP_FIRST outcome distribution remains temporally similar for this context definition",
+                "rationale": rationale,
+            }
+        )
+    return pd.DataFrame(rows).sort_values(
+        ["stability_status", "context_family", "historical_count"],
+        ascending=[True, True, False],
+    ).reset_index(drop=True)
+
+
 def build_stability_report(stability: pd.DataFrame) -> pd.DataFrame:
     """Summarize stability uncertainty by context family and sample-size band."""
     report = stability.copy()
@@ -438,6 +492,11 @@ def main() -> None:
         args.output_dir / "xauusd_m30_empirical_stability_report.csv",
         index=False,
     )
+    research_hypotheses = build_research_hypotheses(stability)
+    research_hypotheses.to_csv(
+        args.output_dir / "xauusd_m30_empirical_research_hypotheses.csv",
+        index=False,
+    )
 
     print("=== Empirical Research ===")
     print(f"Setup candidates: {len(candidates)}")
@@ -473,10 +532,27 @@ def main() -> None:
     print("Stability report:")
     print(stability_report.to_string(index=False))
     print()
+    print()
+    print("Research hypotheses:")
+    print(
+        research_hypotheses[
+            [
+                "context_family",
+                "development_count",
+                "historical_count",
+                "tp_first_rate_delta",
+                "tp_first_delta_ci_low",
+                "tp_first_delta_ci_high",
+                "stability_status",
+                "uncertainty_status",
+            ]
+        ].to_string(index=False)
+    )
+    print()
     print(
         "Detailed empirical tables remain in data/research/*.csv; "
-        "stability report is also saved to "
-        "data/research/xauusd_m30_empirical_stability_report.csv."
+        "stability report: data/research/xauusd_m30_empirical_stability_report.csv; "
+        "research hypotheses: data/research/xauusd_m30_empirical_research_hypotheses.csv."
     )
 
 
