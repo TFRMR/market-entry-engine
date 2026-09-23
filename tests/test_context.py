@@ -358,3 +358,31 @@ def test_context_outcome_join_rejects_overlapping_non_key_columns():
 
     with pytest.raises(ValueError, match="overlap"):
         combine_context_with_outcomes(context, outcomes)
+
+
+def test_empirical_summary_reports_observed_distribution_without_ranking():
+    from market_engine.empirical import summarize_outcomes
+
+    dataset = pd.DataFrame({
+        "direction": ["UP", "UP", "UP", "DOWN"],
+        "poi_fvg_interaction": ["TESTED", "TESTED", "NONE", "TESTED"],
+        "label": ["TP_FIRST", "SL_FIRST", "TP_FIRST", "UNRESOLVED"],
+    })
+
+    result = summarize_outcomes(
+        dataset,
+        ["direction", "poi_fvg_interaction"],
+    )
+
+    up_tested = result[
+        (result["direction"] == "UP")
+        & (result["poi_fvg_interaction"] == "TESTED")
+    ].iloc[0]
+
+    assert up_tested["sample_count"] == 2
+    assert up_tested["tp_first_count"] == 1
+    assert up_tested["sl_first_count"] == 1
+    assert up_tested["tp_first_rate"] == 0.5
+    assert up_tested["sl_first_rate"] == 0.5
+    assert "score" not in result.columns
+    assert "rank" not in result.columns
