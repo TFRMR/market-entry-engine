@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 from pathlib import Path
 
 import pandas as pd
@@ -34,6 +35,7 @@ POI_INTERACTION_COLUMNS = {
 
 STABILITY_MIN_DEVELOPMENT = 20
 STABILITY_MIN_HISTORICAL = 10
+STABILITY_CONFIDENCE_Z = 1.96
 
 
 def summarize_pairwise_contexts(dataset: pd.DataFrame) -> pd.DataFrame:
@@ -78,6 +80,28 @@ def summarize_base_poi_pairs(dataset: pd.DataFrame) -> pd.DataFrame:
             summary.insert(0, "poi_pair", f"{left_name}+{right_name}")
             parts.append(summary)
     return pd.concat(parts, ignore_index=True)
+
+
+def wilson_interval(successes: pd.Series, sample_count: pd.Series) -> tuple[pd.Series, pd.Series]:
+    """Return a 95% Wilson interval for a binomial rate."""
+    proportion = successes / sample_count
+    z = STABILITY_CONFIDENCE_Z
+    denominator = 1.0 + (z * z) / sample_count
+    center = (proportion + (z * z) / (2.0 * sample_count)) / denominator
+    margin = (
+        z
+        * (
+            proportion * (1.0 - proportion) / sample_count
+            + (z * z) / (4.0 * sample_count * sample_count)
+        ).pow(0.5)
+        / denominator
+    )
+    return center - margin, center + margin
+
+
+def normal_two_sided_p_value(z_score: pd.Series) -> pd.Series:
+    """Approximate two-sided normal p-values without an extra dependency."""
+    return z_score.abs().map(lambda value: math.erfc(value / math.sqrt(2.0)))
 
 
 def build_stability_summary(
@@ -130,6 +154,49 @@ def build_stability_summary(
         merged["historical_unresolved_rate"] - merged["development_unresolved_rate"]
     )
     merged["tp_first_rate_abs_delta"] = merged["tp_first_rate_delta"].abs()
+
+    merged["development_tp_first_ci_low"], merged["development_tp_first_ci_high"] = wilson_interval(
+        merged["development_tp_first_count"], merged["development_count"]
+    )
+    merged["historical_tp_first_ci_low"], merged["historical_tp_first_ci_high"] = wilson_interval(
+        merged["historical_tp_first_count"], merged["historical_count"]
+    )
+    merged["development_unresolved_ci_low"], merged["development_unresolved_ci_high"] = wilson_interval(
+        merged["development_unresolved_count"], merged["development_count"]
+    )
+    merged["historical_unresolved_ci_low"], merged["historical_unresolved_ci_high"] = wilson_interval(
+        merged["historical_unresolved_count"], merged["historical_count"]
+    )
+
+    tp_se = (
+        merged["development_tp_first_rate"] * (1.0 - merged["development_tp_first_rate"])
+        / merged["development_count"]
+        + merged["historical_tp_first_rate"] * (1.0 - merged["historical_tp_first_rate"])
+        / merged["historical_count"]
+    ).pow(0.5)
+    merged["tp_first_rate_delta_ci_low"] = merged["tp_first_rate_delta"] - STABILITY_CONFIDENCE_Z * tp_se
+    merged["tp_first_rate_delta_ci_high"] = merged["tp_first_rate_delta"] + STABILITY_CONFIDENCE_Z * tp_se
+    merged["tp_first_drift_z"] = merged["tp_first_rate_delta"] / tp_se.replace(0.0, float("nan"))
+    merged["tp_first_drift_p_value"] = normal_two_sided_p_value(merged["tp_first_drift_z"].fillna(0.0))
+
+    unresolved_se = (
+        merged["development_unresolved_rate"] * (1.0 - merged["development_unresolved_rate"])
+        / merged["development_count"]
+        + merged["historical_unresolved_rate"] * (1.0 - merged["historical_unresolved_rate"])
+        / merged["historical_count"]
+    ).pow(0.5)
+    merged["unresolved_rate_delta_ci_low"] = (
+        merged["unresolved_rate_delta"] - STABILITY_CONFIDENCE_Z * unresolved_se
+    )
+    merged["unresolved_rate_delta_ci_high"] = (
+        merged["unresolved_rate_delta"] + STABILITY_CONFIDENCE_Z * unresolved_se
+    )
+    merged["unresolved_drift_z"] = (
+        merged["unresolved_rate_delta"] / unresolved_se.replace(0.0, float("nan"))
+    )
+    merged["unresolved_drift_p_value"] = normal_two_sided_p_value(
+        merged["unresolved_drift_z"].fillna(0.0)
+    )
     return merged
 
 
@@ -357,6 +424,10 @@ def main() -> None:
                     "development_unresolved_rate",
                     "historical_unresolved_rate",
                     "unresolved_rate_delta",
+                    "tp_first_rate_delta_ci_low",
+                    "tp_first_rate_delta_ci_high",
+                    "tp_first_drift_z",
+                    "tp_first_drift_p_value",
                 ]
             ].to_string(index=False)
         )
