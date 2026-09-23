@@ -383,6 +383,90 @@ def summarize_chronological_hypothesis_evaluation(
 
 
 
+
+def build_development_hypothesis_candidates(development: pd.DataFrame) -> pd.DataFrame:
+    """Enumerate context definitions using development data only."""
+    views = [
+        ("base_context", BASE_CONTEXT_COLUMNS),
+        *[("base_plus_one_poi", [*BASE_CONTEXT_COLUMNS, column]) for column in POI_INTERACTION_COLUMNS.values()],
+        *[
+            ("poi_pair", [left, right])
+            for index, left in enumerate(POI_INTERACTION_COLUMNS.values())
+            for right in list(POI_INTERACTION_COLUMNS.values())[index + 1 :]
+        ],
+    ]
+    rows: list[dict[str, object]] = []
+    for family, columns in views:
+        counts = development.groupby(columns, dropna=False, observed=False).size().reset_index(name="development_count")
+        counts = counts[counts["development_count"] >= STABILITY_MIN_DEVELOPMENT]
+        for _, row in counts.iterrows():
+            candidate = {
+                "context_family": family,
+                "development_count": int(row["development_count"]),
+                "historical_count": pd.NA,
+                "stability_status": "DEVELOPMENT_CANDIDATE",
+                "uncertainty_status": "NOT_USED",
+            }
+            for column in CONTEXT_IDENTITY_COLUMNS:
+                candidate[column] = row[column] if column in columns else pd.NA
+            rows.append(candidate)
+    return pd.DataFrame(rows)
+
+def select_locked_hypotheses(
+    chronological_summary: pd.DataFrame,
+    hypotheses: pd.DataFrame,
+    *,
+    min_folds: int = 3,
+    min_test_count: int = 20,
+    max_median_abs_delta: float = 0.10,
+    max_fold_abs_delta: float = 0.15,
+) -> pd.DataFrame:
+    """Lock development hypotheses using chronological development evidence only."""
+    if chronological_summary.empty or hypotheses.empty:
+        return hypotheses.iloc[0:0].copy()
+    eligible = chronological_summary[
+        (chronological_summary["folds_evaluated"] >= min_folds)
+        & (chronological_summary["median_test_count"] >= min_test_count)
+        & (chronological_summary["median_abs_tp_first_delta"] <= max_median_abs_delta)
+        & (chronological_summary["max_abs_tp_first_delta"] <= max_fold_abs_delta)
+    ][["hypothesis_index"]]
+    locked = hypotheses[hypotheses.index.isin(eligible["hypothesis_index"])].copy()
+    locked.insert(0, "locked_hypothesis_index", locked.index.astype(int))
+    locked["selection_rule"] = (
+        f"development_only: folds>={min_folds}, median_test_count>={min_test_count}, "
+        f"median_abs_delta<={max_median_abs_delta:.2f}, max_abs_delta<={max_fold_abs_delta:.2f}"
+    )
+    return locked.reset_index(drop=True)
+
+def evaluate_locked_hypotheses_on_historical(
+    historical: pd.DataFrame,
+    locked_hypotheses: pd.DataFrame,
+) -> pd.DataFrame:
+    """Evaluate locked context definitions once on untouched historical data."""
+    rows: list[dict[str, object]] = []
+    labeled = historical[historical["label"].notna()].copy()
+    for _, hypothesis in locked_hypotheses.iterrows():
+        context_columns = _hypothesis_context_columns(hypothesis)
+        mask = pd.Series(True, index=labeled.index)
+        for column in context_columns:
+            mask &= labeled[column].eq(hypothesis[column])
+        matched = labeled[mask]
+        if matched.empty:
+            continue
+        rows.append({
+            "locked_hypothesis_index": int(hypothesis["locked_hypothesis_index"]),
+            "context_family": hypothesis["context_family"],
+            "historical_count": len(matched),
+            "historical_tp_first_count": int((matched["label"] == "TP_FIRST").sum()),
+            "historical_sl_first_count": int((matched["label"] == "SL_FIRST").sum()),
+            "historical_unresolved_count": int((matched["label"] == "UNRESOLVED").sum()),
+            "historical_tp_first_rate": float((matched["label"] == "TP_FIRST").mean()),
+            "development_count": hypothesis["development_count"],
+            **{column: hypothesis[column] for column in CONTEXT_IDENTITY_COLUMNS},
+        })
+    return pd.DataFrame(rows)
+
+
 def build_stability_report(stability: pd.DataFrame) -> pd.DataFrame:
     """Summarize stability uncertainty by context family and sample-size band."""
     report = stability.copy()
@@ -578,10 +662,15 @@ def main() -> None:
         index=False,
     )
 
+    development_candidates = build_development_hypothesis_candidates(dev)
+    development_candidates.to_csv(
+        args.output_dir / "xauusd_m30_empirical_development_hypothesis_candidates.csv",
+        index=False,
+    )
     chronological_hypotheses = evaluate_research_hypotheses_chronologically(
         dev,
-        research_hypotheses,
-        fold_count=4,
+        development_candidates,
+        fold_count=3,
     )
     chronological_hypotheses.to_csv(
         args.output_dir / "xauusd_m30_empirical_chronological_hypotheses.csv",
@@ -592,6 +681,22 @@ def main() -> None:
     )
     chronological_summary.to_csv(
         args.output_dir / "xauusd_m30_empirical_chronological_hypothesis_summary.csv",
+        index=False,
+    )
+    locked_hypotheses = select_locked_hypotheses(
+        chronological_summary,
+        development_candidates,
+    )
+    locked_hypotheses.to_csv(
+        args.output_dir / "xauusd_m30_empirical_locked_hypotheses.csv",
+        index=False,
+    )
+    historical_locked = evaluate_locked_hypotheses_on_historical(
+        historical,
+        locked_hypotheses,
+    )
+    historical_locked.to_csv(
+        args.output_dir / "xauusd_m30_empirical_locked_hypotheses_oos.csv",
         index=False,
     )
 
@@ -645,17 +750,35 @@ def main() -> None:
     print(research_hypotheses[hypothesis_columns].to_string(index=False))
     print()
     print()
-    print("Chronological hypothesis evaluation:")
+    print("Development-only hypothesis selection:")
     print(
         chronological_summary.to_string(index=False)
         if not chronological_summary.empty
         else "No chronological hypothesis evaluations available."
     )
     print()
+    print(f"Locked hypotheses: {len(locked_hypotheses)}")
     print(
-        "Chronological hypothesis details: "
-        "data/research/xauusd_m30_empirical_chronological_hypotheses.csv; "
-        "summary: data/research/xauusd_m30_empirical_chronological_hypothesis_summary.csv."
+        locked_hypotheses[
+            ["locked_hypothesis_index", "context_family", *CONTEXT_IDENTITY_COLUMNS, "development_count"]
+        ].to_string(index=False)
+        if not locked_hypotheses.empty
+        else "No hypotheses passed the development-only lock criteria."
+    )
+    print()
+    print("Pristine historical OOS for locked hypotheses:")
+    print(
+        historical_locked.to_string(index=False)
+        if not historical_locked.empty
+        else "No locked hypotheses matched the historical OOS sample."
+    )
+    print()
+    print(
+        "Research artifacts: "
+        "development candidates: data/research/xauusd_m30_empirical_development_hypothesis_candidates.csv; "
+        "chronological folds: data/research/xauusd_m30_empirical_chronological_hypotheses.csv; "
+        "locked hypotheses: data/research/xauusd_m30_empirical_locked_hypotheses.csv; "
+        "pristine historical OOS: data/research/xauusd_m30_empirical_locked_hypotheses_oos.csv."
     )
     print()
     print(
