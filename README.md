@@ -155,7 +155,9 @@ This sequence is a research model, not a trading-rule prescription.
 - [x] Broader pairwise POI/context empirical research runner
 - [x] Broader multi-dimensional empirical context analysis
 - [x] Chronological stability analysis with minimum-sample visibility
-- [ ] Interpret stability findings and select research hypotheses for ML/backtest evaluation
+- [x] Extract testable research hypotheses from empirical stability
+- [x] Evaluate hypotheses across chronological OOS folds
+- [ ] Select research hypotheses for ML/backtest evaluation
 
 ### Statistical / ML evaluation
 
@@ -201,7 +203,7 @@ The runner produces:
 
 The empirical layer is descriptive. It reports sample counts and observed outcome rates for supplied context groups and quantile bins. It does not rank contexts, assign a score, or define a predictive threshold.
 
-The stability output is `data/research/xauusd_m30_empirical_stability.csv`. It matches identical context definitions across development and later historical/OOS data, keeping groups with at least 20 development observations and 10 historical observations. It reports observed outcome-rate deltas without ranking or scoring contexts. A compact aggregate report is also written to `data/research/xauusd_m30_empirical_stability_report.csv`, grouped by context family and minimum-period sample-size band, with median absolute drift, confidence-interval width, and uncertainty summaries. A research-hypothesis table is also written to `data/research/xauusd_m30_empirical_research_hypotheses.csv`; it converts stability observations into explicitly testable temporal-stability hypotheses and labels low-sample cases without ranking contexts.
+The stability output is `data/research/xauusd_m30_empirical_stability.csv`. It matches identical context definitions across development and later historical/OOS data, keeping groups with at least 20 development observations and 10 historical observations. It reports observed outcome-rate deltas without ranking or scoring contexts. A compact aggregate report is also written to `data/research/xauusd_m30_empirical_stability_report.csv`, grouped by context family and minimum-period sample-size band, with median absolute drift, confidence-interval width, and uncertainty summaries. A research-hypothesis table is also written to `data/research/xauusd_m30_empirical_research_hypotheses.csv`; it converts stability observations into explicitly testable temporal-stability hypotheses and labels low-sample cases without ranking contexts. A chronological OOS evaluation is also written to `data/research/xauusd_m30_empirical_chronological_hypotheses.csv` with three expanding test folds after an initial chronological warm-up period, plus `data/research/xauusd_m30_empirical_chronological_hypothesis_summary.csv`. The evaluator reuses the exact context identity from each hypothesis and reports fold-level distribution drift without ranking contexts.
 
 Stability statistics now include 95% Wilson confidence intervals for development and historical TP_FIRST / UNRESOLVED rates, approximate 95% confidence intervals for development-to-historical rate deltas, and standardized drift statistics (z and two-sided normal p-value) for TP_FIRST and UNRESOLVED. These statistics describe sampling uncertainty and distribution drift; they are not used as a ranking score or trading threshold.
 
