@@ -1,4 +1,4 @@
-"""Run a first empirical context/outcome research pass on an MT5 export."""
+"""Run empirical context/outcome research and chronological stability analysis."""
 
 from __future__ import annotations
 
@@ -17,9 +17,11 @@ from market_engine.empirical import summarize_continuous_context, summarize_outc
 from market_engine.structure import build_structural_sequence, process_structural_candles
 
 
-
 BASE_CONTEXT_COLUMNS = [
-    "direction", "structure_direction", "trend_regime", "range_position_zone"
+    "direction",
+    "structure_direction",
+    "trend_regime",
+    "range_position_zone",
 ]
 
 POI_INTERACTION_COLUMNS = {
@@ -29,6 +31,9 @@ POI_INTERACTION_COLUMNS = {
     "liquidity": "poi_liquidity_interaction",
     "sr": "poi_sr_interaction",
 }
+
+STABILITY_MIN_DEVELOPMENT = 20
+STABILITY_MIN_HISTORICAL = 10
 
 
 def summarize_pairwise_contexts(dataset: pd.DataFrame) -> pd.DataFrame:
@@ -46,7 +51,7 @@ def summarize_poi_interaction_pairs(dataset: pd.DataFrame) -> pd.DataFrame:
     parts = []
     names = list(POI_INTERACTION_COLUMNS)
     for left_index, left_name in enumerate(names):
-        for right_name in names[left_index + 1:]:
+        for right_name in names[left_index + 1 :]:
             summary = summarize_outcomes(
                 dataset,
                 [POI_INTERACTION_COLUMNS[left_name], POI_INTERACTION_COLUMNS[right_name]],
@@ -61,7 +66,7 @@ def summarize_base_poi_pairs(dataset: pd.DataFrame) -> pd.DataFrame:
     parts = []
     names = list(POI_INTERACTION_COLUMNS)
     for left_index, left_name in enumerate(names):
-        for right_name in names[left_index + 1:]:
+        for right_name in names[left_index + 1 :]:
             summary = summarize_outcomes(
                 dataset,
                 [
@@ -72,6 +77,138 @@ def summarize_base_poi_pairs(dataset: pd.DataFrame) -> pd.DataFrame:
             )
             summary.insert(0, "poi_pair", f"{left_name}+{right_name}")
             parts.append(summary)
+    return pd.concat(parts, ignore_index=True)
+
+
+def build_stability_summary(
+    development: pd.DataFrame,
+    historical: pd.DataFrame,
+    group_by: list[str],
+    family: str,
+) -> pd.DataFrame:
+    """Compare identical context definitions across development and later data."""
+    dev_summary = summarize_outcomes(development, group_by).rename(
+        columns={
+            "sample_count": "development_count",
+            "tp_first_count": "development_tp_first_count",
+            "sl_first_count": "development_sl_first_count",
+            "unresolved_count": "development_unresolved_count",
+            "both_same_candle_count": "development_both_same_candle_count",
+            "tp_first_rate": "development_tp_first_rate",
+            "sl_first_rate": "development_sl_first_rate",
+            "unresolved_rate": "development_unresolved_rate",
+            "both_same_candle_rate": "development_both_same_candle_rate",
+        }
+    )
+    hist_summary = summarize_outcomes(historical, group_by).rename(
+        columns={
+            "sample_count": "historical_count",
+            "tp_first_count": "historical_tp_first_count",
+            "sl_first_count": "historical_sl_first_count",
+            "unresolved_count": "historical_unresolved_count",
+            "both_same_candle_count": "historical_both_same_candle_count",
+            "tp_first_rate": "historical_tp_first_rate",
+            "sl_first_rate": "historical_sl_first_rate",
+            "unresolved_rate": "historical_unresolved_rate",
+            "both_same_candle_rate": "historical_both_same_candle_rate",
+        }
+    )
+
+    merged = dev_summary.merge(hist_summary, on=group_by, how="inner", validate="one_to_one")
+    merged = merged[
+        (merged["development_count"] >= STABILITY_MIN_DEVELOPMENT)
+        & (merged["historical_count"] >= STABILITY_MIN_HISTORICAL)
+    ].copy()
+    merged.insert(0, "context_family", family)
+    merged["tp_first_rate_delta"] = (
+        merged["historical_tp_first_rate"] - merged["development_tp_first_rate"]
+    )
+    merged["sl_first_rate_delta"] = (
+        merged["historical_sl_first_rate"] - merged["development_sl_first_rate"]
+    )
+    merged["unresolved_rate_delta"] = (
+        merged["historical_unresolved_rate"] - merged["development_unresolved_rate"]
+    )
+    merged["tp_first_rate_abs_delta"] = merged["tp_first_rate_delta"].abs()
+    return merged
+
+
+def build_stability_dataset(
+    development: pd.DataFrame,
+    historical: pd.DataFrame,
+) -> pd.DataFrame:
+    """Build chronological stability views without ranking or scoring contexts."""
+    views = [
+        (
+            "base_context",
+            BASE_CONTEXT_COLUMNS,
+        ),
+        (
+            "base_plus_one_poi",
+            [*BASE_CONTEXT_COLUMNS, "poi_fvg_interaction"],
+        ),
+        (
+            "base_plus_one_poi",
+            [*BASE_CONTEXT_COLUMNS, "poi_ob_interaction"],
+        ),
+        (
+            "base_plus_one_poi",
+            [*BASE_CONTEXT_COLUMNS, "poi_obim_interaction"],
+        ),
+        (
+            "base_plus_one_poi",
+            [*BASE_CONTEXT_COLUMNS, "poi_liquidity_interaction"],
+        ),
+        (
+            "base_plus_one_poi",
+            [*BASE_CONTEXT_COLUMNS, "poi_sr_interaction"],
+        ),
+        (
+            "poi_pair",
+            ["poi_fvg_interaction", "poi_ob_interaction"],
+        ),
+        (
+            "poi_pair",
+            ["poi_fvg_interaction", "poi_obim_interaction"],
+        ),
+        (
+            "poi_pair",
+            ["poi_fvg_interaction", "poi_liquidity_interaction"],
+        ),
+        (
+            "poi_pair",
+            ["poi_fvg_interaction", "poi_sr_interaction"],
+        ),
+        (
+            "poi_pair",
+            ["poi_ob_interaction", "poi_obim_interaction"],
+        ),
+        (
+            "poi_pair",
+            ["poi_ob_interaction", "poi_liquidity_interaction"],
+        ),
+        (
+            "poi_pair",
+            ["poi_ob_interaction", "poi_sr_interaction"],
+        ),
+        (
+            "poi_pair",
+            ["poi_obim_interaction", "poi_liquidity_interaction"],
+        ),
+        (
+            "poi_pair",
+            ["poi_obim_interaction", "poi_sr_interaction"],
+        ),
+        (
+            "poi_pair",
+            ["poi_liquidity_interaction", "poi_sr_interaction"],
+        ),
+    ]
+
+    parts = [
+        build_stability_summary(development, historical, group_by, family)
+        for family, group_by in views
+    ]
     return pd.concat(parts, ignore_index=True)
 
 
@@ -134,29 +271,22 @@ def main() -> None:
     dev = dataset[dataset["setup_timestamp"] < HISTORICAL_AUDIT_CUTOFF].copy()
     historical = dataset[dataset["setup_timestamp"] >= HISTORICAL_AUDIT_CUTOFF].copy()
 
-    categorical = summarize_outcomes(
-        dev,
-        ["direction", "structure_direction", "trend_regime", "range_position_zone"],
-    )
+    categorical = summarize_outcomes(dev, BASE_CONTEXT_COLUMNS)
     categorical.to_csv(args.output_dir / "xauusd_m30_empirical_categorical.csv", index=False)
 
-    continuous = summarize_continuous_context(
-        dev,
-        "pullback_retracement_ratio",
-    )
+    continuous = summarize_continuous_context(dev, "pullback_retracement_ratio")
     continuous.to_csv(args.output_dir / "xauusd_m30_empirical_retracement.csv", index=False)
 
-    retracement_values = pd.to_numeric(dev["pullback_retracement_ratio"], errors="coerce").dropna()
+    retracement_values = pd.to_numeric(
+        dev["pullback_retracement_ratio"], errors="coerce"
+    ).dropna()
     _, retracement_edges = pd.qcut(
         retracement_values,
         q=min(4, int(retracement_values.nunique())),
         duplicates="drop",
         retbins=True,
     )
-    historical_categorical = summarize_outcomes(
-        historical,
-        ["direction", "structure_direction", "trend_regime", "range_position_zone"],
-    )
+    historical_categorical = summarize_outcomes(historical, BASE_CONTEXT_COLUMNS)
     historical_categorical.to_csv(
         args.output_dir / "xauusd_m30_empirical_historical_categorical.csv",
         index=False,
@@ -172,10 +302,7 @@ def main() -> None:
     )
 
     pairwise = summarize_pairwise_contexts(dev)
-    pairwise.to_csv(
-        args.output_dir / "xauusd_m30_empirical_pairwise.csv",
-        index=False,
-    )
+    pairwise.to_csv(args.output_dir / "xauusd_m30_empirical_pairwise.csv", index=False)
     historical_pairwise = summarize_pairwise_contexts(historical)
     historical_pairwise.to_csv(
         args.output_dir / "xauusd_m30_empirical_historical_pairwise.csv",
@@ -183,10 +310,7 @@ def main() -> None:
     )
 
     poi_pairs = summarize_poi_interaction_pairs(dev)
-    poi_pairs.to_csv(
-        args.output_dir / "xauusd_m30_empirical_poi_pairs.csv",
-        index=False,
-    )
+    poi_pairs.to_csv(args.output_dir / "xauusd_m30_empirical_poi_pairs.csv", index=False)
     historical_poi_pairs = summarize_poi_interaction_pairs(historical)
     historical_poi_pairs.to_csv(
         args.output_dir / "xauusd_m30_empirical_historical_poi_pairs.csv",
@@ -204,41 +328,43 @@ def main() -> None:
         index=False,
     )
 
+    stability = build_stability_dataset(dev, historical)
+    stability.to_csv(
+        args.output_dir / "xauusd_m30_empirical_stability.csv",
+        index=False,
+    )
+
     print("=== Empirical Research ===")
     print(f"Setup candidates: {len(candidates)}")
     print(f"Labeled context rows: {len(dataset)}")
     print(f"Development rows: {len(dev)}")
     print(f"Historical rows: {len(historical)}")
     print()
-    print("Categorical context distribution:")
-    print(categorical.to_string(index=False))
+    print("Stability analysis:")
+    print(f"Minimum development sample: {STABILITY_MIN_DEVELOPMENT}")
+    print(f"Minimum historical sample: {STABILITY_MIN_HISTORICAL}")
+    print(f"Matched context groups: {len(stability)}")
+    if not stability.empty:
+        print(
+            stability[
+                [
+                    "context_family",
+                    "development_count",
+                    "historical_count",
+                    "development_tp_first_rate",
+                    "historical_tp_first_rate",
+                    "tp_first_rate_delta",
+                    "development_unresolved_rate",
+                    "historical_unresolved_rate",
+                    "unresolved_rate_delta",
+                ]
+            ].to_string(index=False)
+        )
     print()
-    print("Pullback retracement distribution (development bins):")
-    print(continuous.to_string(index=False))
-    print()
-    print("Historical/OOS categorical distribution:")
-    print(historical_categorical.to_string(index=False))
-    print()
-    print("Historical/OOS pullback retracement distribution (same development bins):")
-    print(historical_continuous.to_string(index=False))
-    print()
-    print("Pairwise base-context + POI interaction (development):")
-    print(pairwise.to_string(index=False))
-    print()
-    print("Pairwise base-context + POI interaction (historical/OOS):")
-    print(historical_pairwise.to_string(index=False))
-    print()
-    print("POI interaction pairs (development):")
-    print(poi_pairs.to_string(index=False))
-    print()
-    print("POI interaction pairs (historical/OOS):")
-    print(historical_poi_pairs.to_string(index=False))
-    print()
-    print("Base context + two POI interactions (development):")
-    print(base_poi_pairs.to_string(index=False))
-    print()
-    print("Base context + two POI interactions (historical/OOS):")
-    print(historical_base_poi_pairs.to_string(index=False))
+    print(
+        "Detailed empirical tables remain in data/research/*.csv; "
+        "terminal output is intentionally limited to stability groups."
+    )
 
 
 if __name__ == "__main__":
