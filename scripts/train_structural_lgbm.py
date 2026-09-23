@@ -199,6 +199,41 @@ def evaluate_pristine_oos(development: pd.DataFrame, historical_audit: pd.DataFr
 
 
 
+FEATURE_GROUPS = {
+    "structure": [column for column in FEATURE_COLUMNS if column.startswith("structure_") or column.startswith("trend_")],
+    "range": [column for column in FEATURE_COLUMNS if column.startswith("range_")],
+    "liquidity": [column for column in FEATURE_COLUMNS if column.startswith("liquidity_") or column.startswith("distance_to_liquidity_")],
+    "order_block": [column for column in FEATURE_COLUMNS if column.startswith("ob_")],
+}
+
+
+def evaluate_oos_feature_ablation(development: pd.DataFrame, historical_audit: pd.DataFrame) -> None:
+    development_binary = development.loc[development["label"].isin(["TP_FIRST", "SL_FIRST"])].copy()
+    oos = historical_audit.loc[historical_audit["label"].isin(["TP_FIRST", "SL_FIRST"])].copy()
+    development_binary["target"] = (development_binary["label"] == "TP_FIRST").astype("int8")
+    oos["target"] = (oos["label"] == "TP_FIRST").astype("int8")
+    X_development_full = prepare_features(development_binary)
+    X_oos_full = prepare_features(oos)
+    model_columns, _, _ = select_model_features(X_development_full)
+    base_rate = float(development_binary["target"].mean())
+    baseline_loss = log_loss(oos["target"], [base_rate] * len(oos))
+    print()
+    print("Pristine OOS feature-group ablation (locked baseline):")
+    print("  Remove one feature family, retrain on full development, evaluate on the same OOS.")
+    for removed_group, removed_columns in FEATURE_GROUPS.items():
+        columns = [column for column in model_columns if column not in removed_columns]
+        X_development = X_development_full[columns]
+        X_oos = X_oos_full[columns].copy()
+        for column in CATEGORICAL_COLUMNS:
+            if column in columns:
+                X_oos.loc[:, column] = X_oos[column].cat.set_categories(X_development[column].cat.categories)
+        model = make_model()
+        model.fit(X_development, development_binary["target"], categorical_feature=[column for column in CATEGORICAL_COLUMNS if column in columns])
+        probability = model.predict_proba(X_oos)[:, 1]
+        oos_loss = log_loss(oos["target"], probability)
+        print(f"  Remove {removed_group:<10} features={len(columns):>2} ROC-AUC={roc_auc_score(oos['target'], probability):.4f} log_loss={oos_loss:.4f} vs_baseline={oos_loss - baseline_loss:+.4f}")
+
+
 def main() -> None:
     print("=== Canonical Structural LightGBM Baseline ===")
     frame = load_mt5_csv(INPUT_PATH)
@@ -269,6 +304,7 @@ def main() -> None:
     print_feature_outcome_drift(dataset, model_columns)
     evaluate_chronological_folds(dataset)
     evaluate_pristine_oos(development, historical_audit)
+    evaluate_oos_feature_ablation(development, historical_audit)
     print()
     print("Test labels:")
     print(y_test.value_counts().sort_index().to_string())
