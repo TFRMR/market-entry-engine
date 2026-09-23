@@ -151,6 +151,7 @@ This sequence is a research model, not a trading-rule prescription.
 - [x] Empirical continuous-context summaries
 - [x] First empirical context research pass
 - [x] Historical/OOS validation of discovered empirical contexts
+- [x] First multi-dimensional empirical context combinations
 - [ ] Broader multi-dimensional empirical context research
 
 ### Statistical / ML evaluation
@@ -192,6 +193,8 @@ The runner produces:
 - `data/research/xauusd_m30_empirical_retracement.csv`
 - `data/research/xauusd_m30_empirical_historical_categorical.csv`
 - `data/research/xauusd_m30_empirical_historical_retracement.csv`
+- `data/research/xauusd_m30_empirical_combinations.csv`
+- `data/research/xauusd_m30_empirical_historical_combinations.csv`
 
 The empirical layer is descriptive. It reports sample counts and observed outcome rates for supplied context groups and quantile bins. It does not rank contexts, assign a score, or define a predictive threshold.
 
