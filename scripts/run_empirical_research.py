@@ -466,6 +466,66 @@ def evaluate_locked_hypotheses_on_historical(
     return pd.DataFrame(rows)
 
 
+def evaluate_locked_hypotheses_economic(
+    dataset: pd.DataFrame,
+    locked_hypotheses: pd.DataFrame,
+    period: str,
+) -> pd.DataFrame:
+    """Evaluate deterministic R-multiple outcomes for locked contexts."""
+    rows: list[dict[str, object]] = []
+    labeled = dataset[dataset["label"].notna()].copy()
+
+    for _, hypothesis in locked_hypotheses.iterrows():
+        context_columns = _hypothesis_context_columns(hypothesis)
+        mask = pd.Series(True, index=labeled.index)
+        for column in context_columns:
+            mask &= labeled[column].eq(hypothesis[column])
+        matched = labeled[mask].copy()
+        if matched.empty:
+            continue
+
+        label = matched["label"].astype(str)
+        tp = matched[label == "TP_FIRST"]
+        sl = matched[label == "SL_FIRST"]
+        unresolved = matched[label == "UNRESOLVED"]
+        ambiguous = matched[label == "BOTH_SAME_CANDLE"]
+
+        tp_rr = pd.to_numeric(tp["reward_risk"], errors="coerce")
+        all_rr = pd.to_numeric(matched["reward_risk"], errors="coerce")
+        resolved = len(tp) + len(sl)
+        resolved_net_r = float(tp_rr.sum()) - float(len(sl))
+
+        rows.append({
+            "locked_hypothesis_index": int(hypothesis["locked_hypothesis_index"]),
+            "period": period,
+            "context_family": hypothesis["context_family"],
+            "development_count": int(hypothesis["development_count"]),
+            "sample_count": len(matched),
+            "economic_sample_count": len(tp) + len(sl) + len(unresolved),
+            "tp_first_count": len(tp),
+            "sl_first_count": len(sl),
+            "unresolved_count": len(unresolved),
+            "both_same_candle_count": len(ambiguous),
+            "tp_first_rate": float(len(tp) / len(matched)),
+            "sl_first_rate": float(len(sl) / len(matched)),
+            "unresolved_rate": float(len(unresolved) / len(matched)),
+            "mean_reward_risk": float(all_rr.mean()),
+            "median_reward_risk": float(all_rr.median()),
+            "tp_mean_reward_risk": float(tp_rr.mean()) if len(tp) else float("nan"),
+            "tp_median_reward_risk": float(tp_rr.median()) if len(tp) else float("nan"),
+            "resolved_net_r": resolved_net_r,
+            "expected_r_per_economic_sample": float(
+                resolved_net_r / (len(tp) + len(sl) + len(unresolved))
+            ),
+            "expected_r_per_resolved_trade": float(
+                resolved_net_r / resolved
+            ) if resolved else float("nan"),
+            **{column: hypothesis[column] for column in CONTEXT_IDENTITY_COLUMNS},
+        })
+
+    return pd.DataFrame(rows)
+
+
 def build_stability_report(stability: pd.DataFrame) -> pd.DataFrame:
     """Summarize stability uncertainty by context family and sample-size band."""
     report = stability.copy()
@@ -698,6 +758,24 @@ def main() -> None:
         args.output_dir / "xauusd_m30_empirical_locked_hypotheses_oos.csv",
         index=False,
     )
+    economic_development = evaluate_locked_hypotheses_economic(
+        dev,
+        locked_hypotheses,
+        period="development",
+    )
+    economic_historical = evaluate_locked_hypotheses_economic(
+        historical,
+        locked_hypotheses,
+        period="historical_oos",
+    )
+    economic = pd.concat(
+        [economic_development, economic_historical],
+        ignore_index=True,
+    )
+    economic.to_csv(
+        args.output_dir / "xauusd_m30_empirical_locked_hypotheses_economic.csv",
+        index=False,
+    )
 
     print("=== Empirical Research ===")
     print(f"Setup candidates: {len(candidates)}")
@@ -770,6 +848,28 @@ def main() -> None:
         historical_locked.to_string(index=False)
         if not historical_locked.empty
         else "No locked hypotheses matched the historical OOS sample."
+    )
+    print()
+    print("Economic outcome evaluation for locked hypotheses:")
+    print(
+        economic[
+            [
+                "locked_hypothesis_index",
+                "period",
+                "sample_count",
+                "tp_first_rate",
+                "sl_first_rate",
+                "unresolved_rate",
+                "mean_reward_risk",
+                "median_reward_risk",
+                "tp_mean_reward_risk",
+                "resolved_net_r",
+                "expected_r_per_economic_sample",
+                "expected_r_per_resolved_trade",
+            ]
+        ].to_string(index=False)
+        if not economic.empty
+        else "No economic evaluations available."
     )
     print()
     print(
