@@ -242,18 +242,22 @@ def main() -> None:
     if dataset.empty:
         print("No matching setups.")
     else:
-        by_direction = (
-            dataset.groupby(["horizon", "direction"], as_index=False)
-            .apply(
-                lambda group: summarize(
-                    group,
-                    f"h{int(group['horizon'].iloc[0])}_{group['direction'].iloc[0]}",
-                ),
-                include_groups=False,
-            )
-            .reset_index(drop=True)
-        )
-        print(by_direction.to_string(index=False))
+        direction_frames = []
+        for (horizon in HORIZONS):
+            for direction in ("UP", "DOWN"):
+                group = dataset[
+                    (dataset["horizon"] == horizon)
+                    & (dataset["direction"] == direction)
+                ]
+                if not group.empty:
+                    direction_frames.append(
+                        summarize(group, f"h{horizon}_{direction}")
+                    )
+
+        if direction_frames:
+            print(pd.concat(direction_frames, ignore_index=True).to_string(index=False))
+        else:
+            print("No matching direction groups.")
 
     print()
     print(f"Artifact: {args.output}")
