@@ -327,3 +327,34 @@ def test_context_outcome_join_rejects_overlapping_non_key_columns():
 
     with pytest.raises(ValueError, match="overlap"):
         combine_context_with_outcomes(context, outcomes)
+
+
+def test_context_outcome_join_preserves_context_and_outcome_fields():
+    context = pd.DataFrame({
+        "setup_index": [10, 20],
+        "direction": ["UP", "DOWN"],
+        "poi_fvg_interaction": ["TESTED", "NONE"],
+    })
+    outcomes = pd.DataFrame({
+        "setup_index": [10, 20],
+        "label": ["TP_FIRST", "SL_FIRST"],
+        "reward_risk": [1.5, 0.8],
+    })
+
+    from market_engine.context import combine_context_with_outcomes
+
+    result = combine_context_with_outcomes(context, outcomes)
+
+    assert result["setup_index"].tolist() == [10, 20]
+    assert result["label"].tolist() == ["TP_FIRST", "SL_FIRST"]
+    assert result["poi_fvg_interaction"].tolist() == ["TESTED", "NONE"]
+
+
+def test_context_outcome_join_rejects_overlapping_non_key_columns():
+    from market_engine.context import combine_context_with_outcomes
+
+    context = pd.DataFrame({"setup_index": [10], "direction": ["UP"]})
+    outcomes = pd.DataFrame({"setup_index": [10], "direction": ["UP"], "label": ["TP_FIRST"]})
+
+    with pytest.raises(ValueError, match="overlap"):
+        combine_context_with_outcomes(context, outcomes)
