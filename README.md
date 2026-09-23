@@ -152,7 +152,8 @@ This sequence is a research model, not a trading-rule prescription.
 - [x] First empirical context research pass
 - [x] Historical/OOS validation of discovered empirical contexts
 - [x] First multi-dimensional empirical context combinations
-- [ ] Broader multi-dimensional empirical context research
+- [x] Broader pairwise POI/context empirical research runner
+- [ ] Broader multi-dimensional empirical context analysis and stability review
 
 ### Statistical / ML evaluation
 
@@ -210,7 +211,7 @@ Current M30 empirical checkpoint:
 - pullback retracement bins are fitted on development and reused unchanged for OOS
 - POI interaction combinations now cover FVG, Order Block, OBIM, liquidity, and structural S/R
 
-The current result is still descriptive research. Differences between development and historical distributions are treated as validation evidence, not as a ranking or trading rule. The next research step is broader multi-dimensional context analysis with minimum-sample visibility and chronological stability checks.
+The current result is still descriptive research. Differences between development and historical distributions are treated as validation evidence, not as a ranking or trading rule. The next research step is broader multi-dimensional context analysis with minimum-sample visibility and chronological stability checks. The runner now expands this pass into pairwise base-context + POI interaction groups, POI interaction pairs, and base-context + two POI interaction dimensions, with separate development and historical/OOS outputs.
 
 Development and later historical observations remain distinguishable. A context that appears interesting in development data is a research hypothesis until its observed distribution is checked chronologically on later data.
 
