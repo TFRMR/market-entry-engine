@@ -200,6 +200,39 @@ def build_stability_summary(
     return merged
 
 
+def build_stability_report(stability: pd.DataFrame) -> pd.DataFrame:
+    """Summarize stability uncertainty by context family and sample-size band."""
+    report = stability.copy()
+    report["sample_band"] = pd.cut(
+        report[["development_count", "historical_count"]].min(axis=1),
+        bins=[0, 19, 49, 99, 249, float("inf")],
+        labels=["10-19", "20-49", "50-99", "100-249", "250+"],
+        include_lowest=True,
+    )
+    report["tp_first_ci_width"] = (
+        report["tp_first_rate_delta_ci_high"] - report["tp_first_rate_delta_ci_low"]
+    )
+    report["tp_first_ci_excludes_zero"] = (
+        (report["tp_first_rate_delta_ci_low"] > 0)
+        | (report["tp_first_rate_delta_ci_high"] < 0)
+    )
+    grouped = (
+        report.groupby(["context_family", "sample_band"], observed=False)
+        .agg(
+            groups=("context_family", "size"),
+            development_count_median=("development_count", "median"),
+            historical_count_median=("historical_count", "median"),
+            median_abs_tp_first_delta=("tp_first_rate_abs_delta", "median"),
+            median_tp_first_ci_width=("tp_first_ci_width", "median"),
+            ci_excludes_zero_count=("tp_first_ci_excludes_zero", "sum"),
+            ci_excludes_zero_rate=("tp_first_ci_excludes_zero", "mean"),
+            median_tp_first_p_value=("tp_first_drift_p_value", "median"),
+        )
+        .reset_index()
+    )
+    return grouped
+
+
 def build_stability_dataset(
     development: pd.DataFrame,
     historical: pd.DataFrame,
@@ -400,6 +433,11 @@ def main() -> None:
         args.output_dir / "xauusd_m30_empirical_stability.csv",
         index=False,
     )
+    stability_report = build_stability_report(stability)
+    stability_report.to_csv(
+        args.output_dir / "xauusd_m30_empirical_stability_report.csv",
+        index=False,
+    )
 
     print("=== Empirical Research ===")
     print(f"Setup candidates: {len(candidates)}")
@@ -432,9 +470,13 @@ def main() -> None:
             ].to_string(index=False)
         )
     print()
+    print("Stability report:")
+    print(stability_report.to_string(index=False))
+    print()
     print(
         "Detailed empirical tables remain in data/research/*.csv; "
-        "terminal output is intentionally limited to stability groups."
+        "stability report is also saved to "
+        "data/research/xauusd_m30_empirical_stability_report.csv."
     )
 
 
