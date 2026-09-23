@@ -149,8 +149,9 @@ This sequence is a research model, not a trading-rule prescription.
 - [x] Context + outcome dataset join
 - [x] Empirical categorical outcome summaries
 - [x] Empirical continuous-context summaries
-- [ ] Broader empirical context research
-- [ ] OOS validation of discovered empirical contexts
+- [x] First empirical context research pass
+- [x] Historical/OOS validation of discovered empirical contexts
+- [ ] Broader multi-dimensional empirical context research
 
 ### Statistical / ML evaluation
 
@@ -189,10 +190,14 @@ The runner produces:
 - `data/research/xauusd_m30_context_outcomes.csv`
 - `data/research/xauusd_m30_empirical_categorical.csv`
 - `data/research/xauusd_m30_empirical_retracement.csv`
+- `data/research/xauusd_m30_empirical_historical_categorical.csv`
+- `data/research/xauusd_m30_empirical_historical_retracement.csv`
 
 The empirical layer is descriptive. It reports sample counts and observed outcome rates for supplied context groups and quantile bins. It does not rank contexts, assign a score, or define a predictive threshold.
 
-Development and later historical observations should remain distinguishable. A context that appears interesting in development data is a research hypothesis until it is tested chronologically on later data.
+The first runner now validates the same categorical context definitions on the later historical/OOS sample. Continuous retracement bins are fitted on development data and reused unchanged on the historical sample, so the OOS pass does not relearn thresholds from the validation period.
+
+Development and later historical observations remain distinguishable. A context that appears interesting in development data is a research hypothesis until its observed distribution is checked chronologically on later data.
 
 ## Structural / S/R Semantics
 
