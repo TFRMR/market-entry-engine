@@ -18,40 +18,62 @@ from market_engine.structure import build_structural_sequence, process_structura
 
 
 
-COMBINATION_GROUPS = {
-    "base_structure": [
-        "direction", "structure_direction", "trend_regime", "range_position_zone"
-    ],
-    "base_plus_fvg": [
-        "direction", "structure_direction", "trend_regime", "range_position_zone",
-        "poi_fvg_interaction"
-    ],
-    "base_plus_ob": [
-        "direction", "structure_direction", "trend_regime", "range_position_zone",
-        "poi_ob_interaction"
-    ],
-    "base_plus_obim": [
-        "direction", "structure_direction", "trend_regime", "range_position_zone",
-        "poi_obim_interaction"
-    ],
-    "base_plus_liquidity": [
-        "direction", "structure_direction", "trend_regime", "range_position_zone",
-        "poi_liquidity_interaction"
-    ],
-    "base_plus_sr": [
-        "direction", "structure_direction", "trend_regime", "range_position_zone",
-        "poi_sr_interaction"
-    ],
+BASE_CONTEXT_COLUMNS = [
+    "direction", "structure_direction", "trend_regime", "range_position_zone"
+]
+
+POI_INTERACTION_COLUMNS = {
+    "fvg": "poi_fvg_interaction",
+    "ob": "poi_ob_interaction",
+    "obim": "poi_obim_interaction",
+    "liquidity": "poi_liquidity_interaction",
+    "sr": "poi_sr_interaction",
 }
 
 
-def summarize_combinations(dataset: pd.DataFrame) -> pd.DataFrame:
+def summarize_pairwise_contexts(dataset: pd.DataFrame) -> pd.DataFrame:
+    """Describe base context plus one POI interaction dimension."""
     parts = []
-    for name, columns in COMBINATION_GROUPS.items():
-        summary = summarize_outcomes(dataset, columns)
-        summary.insert(0, "combination", name)
+    for name, poi_column in POI_INTERACTION_COLUMNS.items():
+        summary = summarize_outcomes(dataset, [*BASE_CONTEXT_COLUMNS, poi_column])
+        summary.insert(0, "poi_dimension", name)
         parts.append(summary)
     return pd.concat(parts, ignore_index=True)
+
+
+def summarize_poi_interaction_pairs(dataset: pd.DataFrame) -> pd.DataFrame:
+    """Describe observed joint states for pairs of POI interactions."""
+    parts = []
+    names = list(POI_INTERACTION_COLUMNS)
+    for left_index, left_name in enumerate(names):
+        for right_name in names[left_index + 1:]:
+            summary = summarize_outcomes(
+                dataset,
+                [POI_INTERACTION_COLUMNS[left_name], POI_INTERACTION_COLUMNS[right_name]],
+            )
+            summary.insert(0, "poi_pair", f"{left_name}+{right_name}")
+            parts.append(summary)
+    return pd.concat(parts, ignore_index=True)
+
+
+def summarize_base_poi_pairs(dataset: pd.DataFrame) -> pd.DataFrame:
+    """Describe base context plus two POI interaction dimensions."""
+    parts = []
+    names = list(POI_INTERACTION_COLUMNS)
+    for left_index, left_name in enumerate(names):
+        for right_name in names[left_index + 1:]:
+            summary = summarize_outcomes(
+                dataset,
+                [
+                    *BASE_CONTEXT_COLUMNS,
+                    POI_INTERACTION_COLUMNS[left_name],
+                    POI_INTERACTION_COLUMNS[right_name],
+                ],
+            )
+            summary.insert(0, "poi_pair", f"{left_name}+{right_name}")
+            parts.append(summary)
+    return pd.concat(parts, ignore_index=True)
+
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -149,14 +171,36 @@ def main() -> None:
         index=False,
     )
 
-    combinations = summarize_combinations(dev)
-    combinations.to_csv(
-        args.output_dir / "xauusd_m30_empirical_combinations.csv",
+    pairwise = summarize_pairwise_contexts(dev)
+    pairwise.to_csv(
+        args.output_dir / "xauusd_m30_empirical_pairwise.csv",
         index=False,
     )
-    historical_combinations = summarize_combinations(historical)
-    historical_combinations.to_csv(
-        args.output_dir / "xauusd_m30_empirical_historical_combinations.csv",
+    historical_pairwise = summarize_pairwise_contexts(historical)
+    historical_pairwise.to_csv(
+        args.output_dir / "xauusd_m30_empirical_historical_pairwise.csv",
+        index=False,
+    )
+
+    poi_pairs = summarize_poi_interaction_pairs(dev)
+    poi_pairs.to_csv(
+        args.output_dir / "xauusd_m30_empirical_poi_pairs.csv",
+        index=False,
+    )
+    historical_poi_pairs = summarize_poi_interaction_pairs(historical)
+    historical_poi_pairs.to_csv(
+        args.output_dir / "xauusd_m30_empirical_historical_poi_pairs.csv",
+        index=False,
+    )
+
+    base_poi_pairs = summarize_base_poi_pairs(dev)
+    base_poi_pairs.to_csv(
+        args.output_dir / "xauusd_m30_empirical_base_poi_pairs.csv",
+        index=False,
+    )
+    historical_base_poi_pairs = summarize_base_poi_pairs(historical)
+    historical_base_poi_pairs.to_csv(
+        args.output_dir / "xauusd_m30_empirical_historical_base_poi_pairs.csv",
         index=False,
     )
 
@@ -178,11 +222,23 @@ def main() -> None:
     print("Historical/OOS pullback retracement distribution (same development bins):")
     print(historical_continuous.to_string(index=False))
     print()
-    print("Context combinations (development):")
-    print(combinations.to_string(index=False))
+    print("Pairwise base-context + POI interaction (development):")
+    print(pairwise.to_string(index=False))
     print()
-    print("Context combinations (historical/OOS):")
-    print(historical_combinations.to_string(index=False))
+    print("Pairwise base-context + POI interaction (historical/OOS):")
+    print(historical_pairwise.to_string(index=False))
+    print()
+    print("POI interaction pairs (development):")
+    print(poi_pairs.to_string(index=False))
+    print()
+    print("POI interaction pairs (historical/OOS):")
+    print(historical_poi_pairs.to_string(index=False))
+    print()
+    print("Base context + two POI interactions (development):")
+    print(base_poi_pairs.to_string(index=False))
+    print()
+    print("Base context + two POI interactions (historical/OOS):")
+    print(historical_base_poi_pairs.to_string(index=False)
 
 
 if __name__ == "__main__":
