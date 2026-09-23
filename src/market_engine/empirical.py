@@ -88,3 +88,43 @@ def summarize_outcomes(
             "both_same_candle_rate",
         ],
     )
+
+
+def summarize_continuous_context(
+    dataset: pd.DataFrame,
+    column: str,
+    *,
+    label_column: str = "label",
+) -> pd.DataFrame:
+    """Summarize outcomes by empirical quantile bins of one continuous fact.
+
+    Bin edges are learned from the supplied dataset only. This is descriptive
+    research output; it is not a predictive threshold or ranking.
+    """
+    required = {column, label_column}
+    missing = sorted(required - set(dataset.columns))
+    if missing:
+        raise ValueError("dataset is missing columns: " + ", ".join(missing))
+
+    frame = dataset[[column, label_column]].copy()
+    frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    frame = frame.dropna(subset=[column, label_column])
+
+    if frame.empty:
+        return summarize_outcomes(
+            pd.DataFrame({column: [], label_column: []}),
+            [column],
+            label_column=label_column,
+        )
+
+    unique_count = int(frame[column].nunique())
+    bin_count = min(4, unique_count)
+    if bin_count < 2:
+        return summarize_outcomes(frame, [column], label_column=label_column)
+
+    frame["context_bin"] = pd.qcut(
+        frame[column],
+        q=bin_count,
+        duplicates="drop",
+    )
+    return summarize_outcomes(frame, ["context_bin"], label_column=label_column)
