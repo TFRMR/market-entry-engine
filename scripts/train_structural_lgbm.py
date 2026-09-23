@@ -33,7 +33,8 @@ FEATURE_COLUMNS = (
     "structure_previous_event_scope", "structure_events_since_last_bos", "structure_events_since_last_swing",
     "structure_bars_since_last_bos", "structure_bars_since_last_swing", "structure_direction",
     "structure_distance_to_high", "structure_distance_to_low", "structure_historical_distance_to_high",
-    "structure_historical_distance_to_low", "trend_regime", "trend_transition", "trend_transition_direction",
+    "structure_historical_distance_to_low", "pullback_active", "pullback_direction", "pullback_depth",
+    "pullback_bars", "pullback_retracement_ratio", "trend_regime", "trend_transition", "trend_transition_direction",
     "range_state", "range_high", "range_low", "range_width", "range_position", "range_position_zone",
     "liquidity_high", "liquidity_low", "liquidity_high_present", "liquidity_low_present",
     "distance_to_liquidity_high", "distance_to_liquidity_low", "liquidity_high_sweep", "liquidity_low_sweep",
@@ -46,7 +47,7 @@ FEATURE_COLUMNS = (
 CATEGORICAL_COLUMNS = (
     "structure_last_event_type", "structure_last_event_direction", "structure_last_event_scope",
     "structure_previous_event_type", "structure_previous_event_direction", "structure_previous_event_scope",
-    "structure_direction", "trend_regime", "trend_transition_direction", "range_state",
+    "structure_direction", "pullback_direction", "trend_regime", "trend_transition_direction", "range_state",
     "range_position_zone", "liquidity_sweep_direction",
 )
 
@@ -204,6 +205,7 @@ FEATURE_GROUPS = {
     "range": [column for column in FEATURE_COLUMNS if column.startswith("range_")],
     "liquidity": [column for column in FEATURE_COLUMNS if column.startswith("liquidity_") or column.startswith("distance_to_liquidity_")],
     "order_block": [column for column in FEATURE_COLUMNS if column.startswith("ob_")],
+    "pullback": [column for column in FEATURE_COLUMNS if column.startswith("pullback_")],
 }
 
 
@@ -247,6 +249,7 @@ def evaluate_oos_individual_ablation(development: pd.DataFrame, historical_audit
     groups = {
         "structure": FEATURE_GROUPS["structure"],
         "liquidity": FEATURE_GROUPS["liquidity"],
+        "pullback": FEATURE_GROUPS["pullback"],
     }
     print()
     print("Pristine OOS individual-feature ablation (structure + liquidity):")
@@ -343,6 +346,7 @@ def main() -> None:
     evaluate_chronological_folds(dataset)
     evaluate_pristine_oos(development, historical_audit)
     evaluate_oos_feature_ablation(development, historical_audit)
+    evaluate_oos_individual_ablation(development, historical_audit)
     print()
     print("Test labels:")
     print(y_test.value_counts().sort_index().to_string())
