@@ -580,7 +580,7 @@ def main() -> None:
     chronological_hypotheses = evaluate_research_hypotheses_chronologically(
         dev,
         research_hypotheses,
-        fold_count=3,
+        fold_count=4,
     )
     chronological_hypotheses.to_csv(
         args.output_dir / "xauusd_m30_empirical_chronological_hypotheses.csv",
