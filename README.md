@@ -153,7 +153,9 @@ This sequence is a research model, not a trading-rule prescription.
 - [x] Historical/OOS validation of discovered empirical contexts
 - [x] First multi-dimensional empirical context combinations
 - [x] Broader pairwise POI/context empirical research runner
-- [ ] Broader multi-dimensional empirical context analysis and stability review
+- [x] Broader multi-dimensional empirical context analysis
+- [x] Chronological stability analysis with minimum-sample visibility
+- [ ] Interpret stability findings and select research hypotheses for ML/backtest evaluation
 
 ### Statistical / ML evaluation
 
@@ -199,6 +201,8 @@ The runner produces:
 
 The empirical layer is descriptive. It reports sample counts and observed outcome rates for supplied context groups and quantile bins. It does not rank contexts, assign a score, or define a predictive threshold.
 
+The stability output is `data/research/xauusd_m30_empirical_stability.csv`. It matches identical context definitions across development and later historical/OOS data, keeping groups with at least 20 development observations and 10 historical observations. It reports observed outcome-rate deltas without ranking or scoring contexts.
+
 The first runner now validates the same categorical context definitions on the later historical/OOS sample. Continuous retracement bins are fitted on development data and reused unchanged on the historical sample, so the OOS pass does not relearn thresholds from the validation period.
 
 Current M30 empirical checkpoint:
@@ -211,7 +215,7 @@ Current M30 empirical checkpoint:
 - pullback retracement bins are fitted on development and reused unchanged for OOS
 - POI interaction combinations now cover FVG, Order Block, OBIM, liquidity, and structural S/R
 
-The current result is still descriptive research. Differences between development and historical distributions are treated as validation evidence, not as a ranking or trading rule. The next research step is broader multi-dimensional context analysis with minimum-sample visibility and chronological stability checks. The runner now expands this pass into pairwise base-context + POI interaction groups, POI interaction pairs, and base-context + two POI interaction dimensions, with separate development and historical/OOS outputs.
+The current result is still descriptive research. Differences between development and historical distributions are treated as validation evidence, not as a ranking or trading rule. The runner now expands this pass into pairwise base-context + POI interaction groups, POI interaction pairs, and base-context + two POI interaction dimensions, with separate development and historical/OOS outputs. It also produces a chronological stability table using the same context definitions in both periods, with minimum-sample visibility.
 
 Development and later historical observations remain distinguishable. A context that appears interesting in development data is a research hypothesis until its observed distribution is checked chronologically on later data.
 
