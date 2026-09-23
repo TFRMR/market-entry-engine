@@ -238,7 +238,7 @@ def main() -> None:
     print(base_poi_pairs.to_string(index=False))
     print()
     print("Base context + two POI interactions (historical/OOS):")
-    print(historical_base_poi_pairs.to_string(index=False)
+    print(historical_base_poi_pairs.to_string(index=False))
 
 
 if __name__ == "__main__":
