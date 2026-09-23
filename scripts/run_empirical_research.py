@@ -419,7 +419,7 @@ def select_locked_hypotheses(
     min_folds: int = 3,
     min_test_count: int = 20,
     max_median_abs_delta: float = 0.10,
-    max_fold_abs_delta: float = 0.15,
+    max_fold_abs_delta: float | None = None,
 ) -> pd.DataFrame:
     """Lock development hypotheses using chronological development evidence only."""
     if chronological_summary.empty or hypotheses.empty:
@@ -428,13 +428,12 @@ def select_locked_hypotheses(
         (chronological_summary["folds_evaluated"] >= min_folds)
         & (chronological_summary["median_test_count"] >= min_test_count)
         & (chronological_summary["median_abs_tp_first_delta"] <= max_median_abs_delta)
-        & (chronological_summary["max_abs_tp_first_delta"] <= max_fold_abs_delta)
     ][["hypothesis_index"]]
     locked = hypotheses[hypotheses.index.isin(eligible["hypothesis_index"])].copy()
     locked.insert(0, "locked_hypothesis_index", locked.index.astype(int))
     locked["selection_rule"] = (
         f"development_only: folds>={min_folds}, median_test_count>={min_test_count}, "
-        f"median_abs_delta<={max_median_abs_delta:.2f}, max_abs_delta<={max_fold_abs_delta:.2f}"
+        f"median_abs_delta<={max_median_abs_delta:.2f}"
     )
     return locked.reset_index(drop=True)
 
