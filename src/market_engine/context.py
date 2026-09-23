@@ -141,3 +141,35 @@ def build_context_dataset(
         rows,
         columns=["setup_index", "setup_timestamp", "direction", *CONTEXT_COLUMNS],
     )
+
+
+def combine_context_with_outcomes(
+    context_dataset: pd.DataFrame,
+    outcome_dataset: pd.DataFrame,
+) -> pd.DataFrame:
+    """Attach realized outcome fields to point-in-time context rows.
+
+    The context side remains as-of the setup candle; outcome columns come only
+    from the separately evaluated forward path.
+    """
+    if "setup_index" not in context_dataset.columns:
+        raise ValueError("context_dataset must contain setup_index.")
+    if "setup_index" not in outcome_dataset.columns:
+        raise ValueError("outcome_dataset must contain setup_index.")
+
+    duplicate_columns = (
+        set(context_dataset.columns) & set(outcome_dataset.columns)
+    ) - {"setup_index"}
+    if duplicate_columns:
+        raise ValueError(
+            "context and outcome datasets overlap on non-key columns: "
+            + ", ".join(sorted(duplicate_columns))
+        )
+
+    return context_dataset.merge(
+        outcome_dataset,
+        on="setup_index",
+        how="inner",
+        sort=False,
+        validate="one_to_one",
+    )
