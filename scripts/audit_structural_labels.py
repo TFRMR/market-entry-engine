@@ -21,6 +21,8 @@ from market_engine.labels import (
     build_setup_label_dataset,
 )
 from market_engine.setup_facts import SETUP_FACT_COLUMNS
+from market_engine.order_block import find_order_block_candidates
+from market_engine.poi import POIType, build_inducement_events, build_poi_records
 from market_engine.structure import (
     Direction,
     SwingType,
@@ -362,7 +364,9 @@ def main() -> None:
     _, _, snapshots = process_structural_candles_with_context(structural)
     snapshots_by_index = {snapshot.index: snapshot for snapshot in snapshots}
 
-    _audit_poi_context(frame, swings, events)\n\n    # Point-in-time structural chronology audit.
+    _audit_poi_context(frame, swings, events)
+
+    # Point-in-time structural chronology audit.
     chronology_violations: list[tuple[int, str, int, int]] = []
     for snapshot in snapshots:
         setup_index = snapshot.index
