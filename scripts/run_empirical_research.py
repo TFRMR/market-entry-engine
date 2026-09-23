@@ -17,6 +17,42 @@ from market_engine.empirical import summarize_continuous_context, summarize_outc
 from market_engine.structure import build_structural_sequence, process_structural_candles
 
 
+
+COMBINATION_GROUPS = {
+    "base_structure": [
+        "direction", "structure_direction", "trend_regime", "range_position_zone"
+    ],
+    "base_plus_fvg": [
+        "direction", "structure_direction", "trend_regime", "range_position_zone",
+        "poi_fvg_interaction"
+    ],
+    "base_plus_ob": [
+        "direction", "structure_direction", "trend_regime", "range_position_zone",
+        "poi_ob_interaction"
+    ],
+    "base_plus_obim": [
+        "direction", "structure_direction", "trend_regime", "range_position_zone",
+        "poi_obim_interaction"
+    ],
+    "base_plus_liquidity": [
+        "direction", "structure_direction", "trend_regime", "range_position_zone",
+        "poi_liquidity_interaction"
+    ],
+    "base_plus_sr": [
+        "direction", "structure_direction", "trend_regime", "range_position_zone",
+        "poi_sr_interaction"
+    ],
+}
+
+
+def summarize_combinations(dataset: pd.DataFrame) -> pd.DataFrame:
+    parts = []
+    for name, columns in COMBINATION_GROUPS.items():
+        summary = summarize_outcomes(dataset, columns)
+        summary.insert(0, "combination", name)
+        parts.append(summary)
+    return pd.concat(parts, ignore_index=True)
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("csv", type=Path)
@@ -113,6 +149,17 @@ def main() -> None:
         index=False,
     )
 
+    combinations = summarize_combinations(dev)
+    combinations.to_csv(
+        args.output_dir / "xauusd_m30_empirical_combinations.csv",
+        index=False,
+    )
+    historical_combinations = summarize_combinations(historical)
+    historical_combinations.to_csv(
+        args.output_dir / "xauusd_m30_empirical_historical_combinations.csv",
+        index=False,
+    )
+
     print("=== Empirical Research ===")
     print(f"Setup candidates: {len(candidates)}")
     print(f"Labeled context rows: {len(dataset)}")
@@ -130,6 +177,12 @@ def main() -> None:
     print()
     print("Historical/OOS pullback retracement distribution (same development bins):")
     print(historical_continuous.to_string(index=False))
+    print()
+    print("Context combinations (development):")
+    print(combinations.to_string(index=False))
+    print()
+    print("Context combinations (historical/OOS):")
+    print(historical_combinations.to_string(index=False))
 
 
 if __name__ == "__main__":
