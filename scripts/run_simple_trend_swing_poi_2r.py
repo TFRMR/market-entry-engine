@@ -24,6 +24,8 @@ from market_engine.structure import (
 
 
 HORIZONS = (10, 20, 40, 80)
+POI_BREAKDOWN_HORIZONS = (40, 80)
+POI_NAMES = ("FVG", "OB", "OBIM", "LIQUIDITY", "SR")
 
 POI_COLUMNS = (
     "poi_fvg_present",
@@ -231,6 +233,26 @@ def main() -> None:
                 )
 
     print(pd.DataFrame(direction_rows).to_string(index=False))
+
+    print()
+    print("POI type breakdown (presence; setups may belong to multiple POI types):")
+    poi_rows = []
+    for horizon in POI_BREAKDOWN_HORIZONS:
+        for poi_name in POI_NAMES:
+            for name, group in (
+                ("development", development),
+                ("historical_oos", historical),
+            ):
+                subset = group[
+                    (group["horizon"] == horizon)
+                    & group["poi"].str.split("+").apply(lambda values: poi_name in values)
+                ]
+                if not subset.empty:
+                    poi_rows.append(
+                        summarize(subset, f"{name}_h{horizon}_{poi_name}")
+                    )
+
+    print(pd.DataFrame(poi_rows).to_string(index=False))
     print()
     print(f"Artifact: {args.output}")
 
