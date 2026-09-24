@@ -87,8 +87,7 @@ def fvg_candidates(
 ) -> list[POIRecord]:
     """Return directional FVGs available by the setup.
 
-    Deliberately no swing-leg containment filter here. Location/context will
-    be tested separately after the basic trigger has enough observations.
+    Deliberately no swing-leg containment filter here.
     """
 
     return [
@@ -133,10 +132,7 @@ def find_trigger(
         if touch_index is None:
             continue
 
-        # A close outside the FVG invalidates the waiting state before trigger.
         if float(candle["close"]) < poi.low or float(candle["close"]) > poi.high:
-            # Keep the first-touch candle alive even when its wick sweeps the
-            # FVG boundary; subsequent closes outside invalidate the wait.
             if position > touch_index:
                 return None, "INVALIDATED", touch_index
 
@@ -192,7 +188,6 @@ def build_dataset(frame: pd.DataFrame) -> pd.DataFrame:
         if not fvgs:
             continue
 
-        # Use the most recent directional FVG available at setup.
         poi = max(
             fvgs,
             key=lambda item: (item.created_index, item.source_index or -1),
@@ -285,6 +280,28 @@ def summarize(dataset: pd.DataFrame, name: str) -> dict:
     }
 
 
+def print_direction_breakdown(
+    dataset: pd.DataFrame,
+    period_name: str,
+) -> None:
+    print()
+    print(f"Direction breakdown: {period_name}")
+    rows = []
+    for direction in ("UP", "DOWN"):
+        for horizon in (20, 40, 80):
+            subset = dataset[
+                (dataset["direction"] == direction)
+                & (dataset["horizon_after_trigger"] == horizon)
+            ]
+            summary = summarize(
+                subset,
+                f"{direction}_h{horizon}",
+            )
+            rows.append(summary)
+
+    print(pd.DataFrame(rows).to_string(index=False))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("csv", type=Path)
@@ -308,7 +325,10 @@ def main() -> None:
 
     print("=== Trend + Valid Swing + Loose FVG First Touch -> Opposite Color Trigger ===")
     print("Horizons after trigger: 5, 10, 20, 40, 80")
-    print("Matching FVG triggers:", dataset["setup_index"].nunique() if not dataset.empty else 0)
+    print(
+        "Matching FVG triggers:",
+        dataset["setup_index"].nunique() if not dataset.empty else 0,
+    )
     print()
 
     rows = []
@@ -321,6 +341,9 @@ def main() -> None:
             rows.append(summarize(subset, f"{period}_h{horizon}"))
 
     print(pd.DataFrame(rows).to_string(index=False))
+
+    print_direction_breakdown(development, "development")
+    print_direction_breakdown(historical, "historical_oos")
 
     if not dataset.empty:
         print()
