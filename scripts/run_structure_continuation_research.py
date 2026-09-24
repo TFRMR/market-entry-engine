@@ -19,8 +19,6 @@ import pandas as pd
 from market_engine.data import load_mt5_csv
 from market_engine.structure import (
     Direction,
-    StructureEvent,
-    StructureScope,
     SwingType,
     build_structural_sequence,
     process_structural_candles,
@@ -34,24 +32,17 @@ def build_dataset(frame: pd.DataFrame) -> pd.DataFrame:
     structural = build_structural_sequence(frame)
     swings, events = process_structural_candles(structural)
 
-    event_by_index: dict[int, list[StructureEvent]] = {}
-    for event in events:
-        event_by_index.setdefault(event.index, []).append(event)
-
     rows = []
     used = set()
 
     for event in events:
-        if event.event_type not in {"BULLISH_BOS", "BEARISH_BOS"}:
+        if event.event not in {"BULLISH_BOS", "BEARISH_BOS"}:
             continue
 
         direction = (
-            Direction.UP if event.event_type == "BULLISH_BOS" else Direction.DOWN
+            Direction.UP if event.event == "BULLISH_BOS" else Direction.DOWN
         )
 
-        # Require the BOS itself to be the continuation event.
-        # The first subsequent confirmed swing in the same direction context
-        # is the structural pullback/confirmation point.
         future_swings = [
             swing
             for swing in swings
@@ -82,7 +73,7 @@ def build_dataset(frame: pd.DataFrame) -> pd.DataFrame:
             {
                 "bos_index": event.index,
                 "bos_timestamp": frame.iloc[event.index]["timestamp"],
-                "bos_event": event.event_type,
+                "bos_event": event.event,
                 "bos_scope": event.scope.value if event.scope else None,
                 "direction": direction.value,
                 "confirmation_index": confirmation_index,
