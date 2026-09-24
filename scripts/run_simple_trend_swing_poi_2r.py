@@ -29,7 +29,7 @@ from market_engine.structure import (
 )
 
 
-HORIZONS = (40, 80)
+HORIZONS = (5, 10, 20, 40, 80)
 POI_TYPES = (POIType.FVG, POIType.ORDER_BLOCK)
 
 
@@ -251,7 +251,7 @@ def main() -> None:
     dataset.to_csv(args.output, index=False)
 
     print("=== Trend + Valid Swing + OB/FVG First Touch ===")
-    print("Horizons after touch: 40, 80")
+    print("Horizons after touch: 5, 10, 20, 40, 80")
     print(
         "Matching setup/POI interactions:",
         dataset[["setup_index", "poi_type"]].drop_duplicates().shape[0]
