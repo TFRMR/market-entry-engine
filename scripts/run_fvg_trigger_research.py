@@ -319,8 +319,9 @@ def main() -> None:
         print("No matching FVG triggers.")
         return
 
+    boundary = pd.Timestamp("2026-03-18")
     triggers["period"] = triggers["setup_timestamp"].map(
-        lambda value: "development" if value < "2026-03-18" else "historical_oos"
+        lambda value: "development" if pd.Timestamp(value) < boundary else "historical_oos"
     )
 
     rows = []
