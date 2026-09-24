@@ -3,12 +3,17 @@
 Scenario:
     Trend confirmed
     -> valid swing / BOS setup
-    -> FVG created inside the current swing leg
+    -> directional FVG
     -> first touch
     -> wait while FVG remains valid
     -> first later candle closing in the opposite direction to the touch candle
        becomes the trigger
     -> measure post-trigger MFE/MAE.
+
+The FVG candidate scope is intentionally loose: it no longer requires the FVG
+to sit between a specific pair of confirmed swings. The first experiment is
+meant to measure whether the simple FVG trigger itself has enough sample size
+before adding stricter location/context filters.
 
 No engulfing or body-size threshold is used.
 """
@@ -33,7 +38,6 @@ from market_engine.poi import (
 )
 from market_engine.structure import (
     Direction,
-    SwingType,
     build_structural_sequence,
     process_structural_candles,
 )
@@ -76,42 +80,22 @@ def excursion_after_trigger(
     return float(mfe), float(mae)
 
 
-def fvg_in_current_leg(
+def fvg_candidates(
     pois: list[POIRecord],
-    swings,
     setup_index: int,
     direction: Direction,
 ) -> list[POIRecord]:
-    if direction is Direction.UP:
-        start_type = SwingType.LOW
-        end_type = SwingType.HIGH
-    else:
-        start_type = SwingType.HIGH
-        end_type = SwingType.LOW
+    """Return directional FVGs available by the setup.
 
-    starts = [
-        s for s in swings
-        if s.swing_type is start_type
-        and s.confirmation_index < setup_index
-    ]
-    ends = [
-        s for s in swings
-        if s.swing_type is end_type
-        and s.confirmation_index < setup_index
-    ]
-    if not starts or not ends:
-        return []
-
-    start = max(starts, key=lambda s: s.confirmation_index)
-    end = max(ends, key=lambda s: s.confirmation_index)
-    if start.confirmation_index >= end.confirmation_index:
-        return []
+    Deliberately no swing-leg containment filter here. Location/context will
+    be tested separately after the basic trigger has enough observations.
+    """
 
     return [
-        poi for poi in pois
+        poi
+        for poi in pois
         if poi.poi_type is POIType.FVG
         and poi.direction is direction
-        and start.confirmation_index <= poi.created_index <= end.confirmation_index
         and poi.created_index <= setup_index
     ]
 
@@ -136,8 +120,6 @@ def find_trigger(
         if interaction is PriceInteraction.NONE:
             if touch_index is None:
                 continue
-            # After touch, a later candle may trigger even if it no longer
-            # overlaps the FVG. Validity is checked separately below.
         else:
             if touch_index is None:
                 touch_index = position
@@ -153,8 +135,8 @@ def find_trigger(
 
         # A close outside the FVG invalidates the waiting state before trigger.
         if float(candle["close"]) < poi.low or float(candle["close"]) > poi.high:
-            # A first-touch candle itself may close outside after a wick sweep;
-            # keep the FVG alive unless the next waiting candle closes outside.
+            # Keep the first-touch candle alive even when its wick sweeps the
+            # FVG boundary; subsequent closes outside invalidate the wait.
             if position > touch_index:
                 return None, "INVALIDATED", touch_index
 
@@ -162,7 +144,11 @@ def find_trigger(
             float(candle["open"]),
             float(candle["close"]),
         )
-        if position > touch_index and current_color != 0 and current_color != touch_color:
+        if (
+            position > touch_index
+            and current_color != 0
+            and current_color != touch_color
+        ):
             return position, "TRIGGERED", touch_index
 
     return None, "NO_TRIGGER", touch_index
@@ -202,12 +188,15 @@ def build_dataset(frame: pd.DataFrame) -> pd.DataFrame:
         setup_index = candidate.setup_index
         direction = candidate.direction
 
-        fvgs = fvg_in_current_leg(pois, swings, setup_index, direction)
+        fvgs = fvg_candidates(pois, setup_index, direction)
         if not fvgs:
             continue
 
-        # Use the most recent FVG in the current swing leg.
-        poi = max(fvgs, key=lambda item: (item.created_index, item.source_index or -1))
+        # Use the most recent directional FVG available at setup.
+        poi = max(
+            fvgs,
+            key=lambda item: (item.created_index, item.source_index or -1),
+        )
 
         trigger_index, status, touch_index = find_trigger(
             frame, poi, setup_index
@@ -317,7 +306,7 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     dataset.to_csv(args.output, index=False)
 
-    print("=== Trend + Valid Swing + FVG First Touch -> Opposite Color Trigger ===")
+    print("=== Trend + Valid Swing + Loose FVG First Touch -> Opposite Color Trigger ===")
     print("Horizons after trigger: 5, 10, 20, 40, 80")
     print("Matching FVG triggers:", dataset["setup_index"].nunique() if not dataset.empty else 0)
     print()
