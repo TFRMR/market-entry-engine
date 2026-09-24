@@ -1,19 +1,19 @@
-"""Research FVG-first trigger: touch, opposite-color close, then MFE/MAE.
+"""Research FVG-first trigger and simple economic outcome.
 
 Scenario:
     Trend confirmed
     -> valid swing / BOS setup
     -> directional FVG
     -> first touch
-    -> wait while FVG remains valid
     -> first later candle closing in the opposite direction to the touch candle
        becomes the trigger
-    -> measure post-trigger MFE/MAE.
+    -> entry at trigger close
+    -> SL = 1R from trigger to structural invalidation
+    -> TP = 2R
+    -> evaluate first barrier within 40/80 M30 candles.
 
-The FVG candidate scope is intentionally loose: it no longer requires the FVG
-to sit between a specific pair of confirmed swings. The first experiment is
-meant to measure whether the simple FVG trigger itself has enough sample size
-before adding stricter location/context filters.
+The FVG candidate scope is intentionally loose: it does not require the FVG
+to sit between a specific pair of confirmed swings.
 
 No engulfing or body-size threshold is used.
 """
@@ -32,9 +32,9 @@ from market_engine.features import build_structural_features
 from market_engine.poi import (
     POIRecord,
     POIType,
+    PriceInteraction,
     build_poi_records,
     classify_poi_interaction,
-    PriceInteraction,
 )
 from market_engine.structure import (
     Direction,
@@ -43,7 +43,9 @@ from market_engine.structure import (
 )
 
 
-HORIZONS = (5, 10, 20, 40, 80)
+HORIZONS = (40, 80)
+TP_R = 2.0
+SL_R = 1.0
 
 
 def candle_color(open_price: float, close_price: float) -> int:
@@ -54,42 +56,11 @@ def candle_color(open_price: float, close_price: float) -> int:
     return 0
 
 
-def excursion_after_trigger(
-    candidate,
-    frame: pd.DataFrame,
-    trigger_index: int,
-    horizon: int,
-) -> tuple[float, float]:
-    entry = float(frame.iloc[trigger_index]["close"])
-    risk = abs(float(candidate.entry_price) - float(candidate.invalidation_price))
-    if risk <= 0:
-        return float("nan"), float("nan")
-
-    end = min(trigger_index + horizon, len(frame) - 1)
-    future = frame.iloc[trigger_index + 1 : end + 1]
-    if future.empty:
-        return float("nan"), float("nan")
-
-    if candidate.direction is Direction.UP:
-        mfe = (future["high"].max() - entry) / risk
-        mae = (entry - future["low"].min()) / risk
-    else:
-        mfe = (entry - future["low"].min()) / risk
-        mae = (future["high"].max() - entry) / risk
-
-    return float(mfe), float(mae)
-
-
 def fvg_candidates(
     pois: list[POIRecord],
     setup_index: int,
     direction: Direction,
 ) -> list[POIRecord]:
-    """Return directional FVGs available by the setup.
-
-    Deliberately no swing-leg containment filter here.
-    """
-
     return [
         poi
         for poi in pois
@@ -119,22 +90,26 @@ def find_trigger(
         if interaction is PriceInteraction.NONE:
             if touch_index is None:
                 continue
-        else:
-            if touch_index is None:
-                touch_index = position
-                touch_color = candle_color(
-                    float(candle["open"]),
-                    float(candle["close"]),
-                )
-                if touch_color == 0:
-                    continue
+        elif touch_index is None:
+            touch_index = position
+            touch_color = candle_color(
+                float(candle["open"]),
+                float(candle["close"]),
+            )
+            if touch_color == 0:
+                continue
 
         if touch_index is None:
             continue
 
-        if float(candle["close"]) < poi.low or float(candle["close"]) > poi.high:
-            if position > touch_index:
-                return None, "INVALIDATED", touch_index
+        if (
+            position > touch_index
+            and (
+                float(candle["close"]) < poi.low
+                or float(candle["close"]) > poi.high
+            )
+        ):
+            return None, "INVALIDATED", touch_index
 
         current_color = candle_color(
             float(candle["open"]),
@@ -150,7 +125,7 @@ def find_trigger(
     return None, "NO_TRIGGER", touch_index
 
 
-def build_dataset(frame: pd.DataFrame) -> pd.DataFrame:
+def build_trigger_dataset(frame: pd.DataFrame) -> pd.DataFrame:
     candidates = build_setup_candidates(frame)
     features = build_structural_features(frame)
     structural = build_structural_sequence(frame)
@@ -174,10 +149,11 @@ def build_dataset(frame: pd.DataFrame) -> pd.DataFrame:
     seen = set()
 
     for _, row in context.iterrows():
-        if not (
+        aligned = (
             (row["direction"] == "UP" and float(row["structure_direction"]) > 0)
             or (row["direction"] == "DOWN" and float(row["structure_direction"]) < 0)
-        ):
+        )
+        if not aligned:
             continue
 
         candidate = candidate_by_key[(int(row["setup_index"]), row["direction"])]
@@ -194,7 +170,9 @@ def build_dataset(frame: pd.DataFrame) -> pd.DataFrame:
         )
 
         trigger_index, status, touch_index = find_trigger(
-            frame, poi, setup_index
+            frame,
+            poi,
+            setup_index,
         )
         if trigger_index is None:
             continue
@@ -204,102 +182,122 @@ def build_dataset(frame: pd.DataFrame) -> pd.DataFrame:
             continue
         seen.add(key)
 
-        touch_color = candle_color(
-            float(frame.iloc[touch_index]["open"]),
-            float(frame.iloc[touch_index]["close"]),
+        trigger_entry = float(frame.iloc[trigger_index]["close"])
+        risk = abs(trigger_entry - float(candidate.invalidation_price))
+        if risk <= 0:
+            continue
+
+        rows.append(
+            {
+                "setup_index": setup_index,
+                "setup_timestamp": candidate.setup_timestamp,
+                "direction": direction.value,
+                "trend": row["trend_regime"],
+                "fvg_created_index": poi.created_index,
+                "fvg_age_at_setup": setup_index - poi.created_index,
+                "touch_index": touch_index,
+                "trigger_index": trigger_index,
+                "bars_to_touch": touch_index - setup_index,
+                "bars_touch_to_trigger": trigger_index - touch_index,
+                "trigger_entry": trigger_entry,
+                "invalidation_price": float(candidate.invalidation_price),
+                "risk_price": risk,
+            }
         )
-        trigger_color = candle_color(
-            float(frame.iloc[trigger_index]["open"]),
-            float(frame.iloc[trigger_index]["close"]),
-        )
-
-        bars_to_touch = touch_index - setup_index
-        bars_touch_to_trigger = trigger_index - touch_index
-
-        for horizon in HORIZONS:
-            mfe, mae = excursion_after_trigger(
-                candidate,
-                frame,
-                trigger_index,
-                horizon,
-            )
-            if pd.isna(mfe) or pd.isna(mae):
-                continue
-
-            rows.append(
-                {
-                    "setup_index": setup_index,
-                    "setup_timestamp": candidate.setup_timestamp,
-                    "direction": direction.value,
-                    "trend": row["trend_regime"],
-                    "fvg_created_index": poi.created_index,
-                    "fvg_age_at_setup": setup_index - poi.created_index,
-                    "touch_index": touch_index,
-                    "bars_to_touch": bars_to_touch,
-                    "bars_touch_to_trigger": bars_touch_to_trigger,
-                    "touch_color": touch_color,
-                    "trigger_color": trigger_color,
-                    "trigger_status": status,
-                    "horizon_after_trigger": horizon,
-                    "mfe_r": mfe,
-                    "mae_r": mae,
-                }
-            )
 
     return pd.DataFrame(rows)
 
 
-def summarize(dataset: pd.DataFrame, name: str) -> dict:
-    if dataset.empty:
+def evaluate_trade(
+    row: pd.Series,
+    frame: pd.DataFrame,
+    horizon: int,
+) -> tuple[str, float | None, int | None]:
+    trigger_index = int(row["trigger_index"])
+    entry = float(row["trigger_entry"])
+    risk = float(row["risk_price"])
+    direction = row["direction"]
+
+    if direction == "UP":
+        tp = entry + TP_R * risk
+        sl = entry - SL_R * risk
+    else:
+        tp = entry - TP_R * risk
+        sl = entry + SL_R * risk
+
+    end = min(trigger_index + horizon, len(frame) - 1)
+    for position in range(trigger_index + 1, end + 1):
+        candle = frame.iloc[position]
+        high = float(candle["high"])
+        low = float(candle["low"])
+
+        if direction == "UP":
+            hit_tp = high >= tp
+            hit_sl = low <= sl
+        else:
+            hit_tp = low <= tp
+            hit_sl = high >= sl
+
+        if hit_tp and hit_sl:
+            return "AMBIGUOUS", None, position
+        if hit_tp:
+            return "TP_FIRST", TP_R, position
+        if hit_sl:
+            return "SL_FIRST", -SL_R, position
+
+    return "UNRESOLVED", 0.0, end
+
+
+def summarize_economic(
+    dataset: pd.DataFrame,
+    frame: pd.DataFrame,
+    period: str,
+    horizon: int,
+) -> dict:
+    subset = dataset[
+        (dataset["period"] == period)
+        & (dataset["horizon"] == horizon)
+    ].copy()
+
+    n = len(subset)
+    if n == 0:
         return {
-            "scenario": name,
-            "sample": 0,
-            "bars_to_touch_median": float("nan"),
-            "bars_touch_to_trigger_median": float("nan"),
-            "mfe_median_r": float("nan"),
-            "mfe_p25_r": float("nan"),
-            "mfe_p75_r": float("nan"),
-            "mae_median_r": float("nan"),
-            "mae_p75_r": float("nan"),
-            "p_mfe_ge_1r": float("nan"),
-            "p_mfe_ge_2r": float("nan"),
+            "period": period,
+            "horizon": horizon,
+            "n": 0,
+            "TP_FIRST": 0,
+            "SL_FIRST": 0,
+            "AMBIGUOUS": 0,
+            "UNRESOLVED": 0,
+            "TP_pct": 0.0,
+            "SL_pct": 0.0,
+            "resolved_pct": 0.0,
+            "expected_r_per_entry": 0.0,
         }
 
+    counts = subset["outcome"].value_counts()
+    tp = int(counts.get("TP_FIRST", 0))
+    sl = int(counts.get("SL_FIRST", 0))
+    ambiguous = int(counts.get("AMBIGUOUS", 0))
+    unresolved = int(counts.get("UNRESOLVED", 0))
+
+    # Ambiguous trades are excluded from the economic expectation rather than
+    # assigning an arbitrary winner.
+    resolved = tp + sl
+    net_r = tp * TP_R - sl * SL_R
     return {
-        "scenario": name,
-        "sample": len(dataset),
-        "bars_to_touch_median": dataset["bars_to_touch"].median(),
-        "bars_touch_to_trigger_median": dataset["bars_touch_to_trigger"].median(),
-        "mfe_median_r": dataset["mfe_r"].median(),
-        "mfe_p25_r": dataset["mfe_r"].quantile(0.25),
-        "mfe_p75_r": dataset["mfe_r"].quantile(0.75),
-        "mae_median_r": dataset["mae_r"].median(),
-        "mae_p75_r": dataset["mae_r"].quantile(0.75),
-        "p_mfe_ge_1r": (dataset["mfe_r"] >= 1.0).mean(),
-        "p_mfe_ge_2r": (dataset["mfe_r"] >= 2.0).mean(),
+        "period": period,
+        "horizon": horizon,
+        "n": n,
+        "TP_FIRST": tp,
+        "SL_FIRST": sl,
+        "AMBIGUOUS": ambiguous,
+        "UNRESOLVED": unresolved,
+        "TP_pct": tp / n,
+        "SL_pct": sl / n,
+        "resolved_pct": resolved / n,
+        "expected_r_per_entry": net_r / n,
     }
-
-
-def print_direction_breakdown(
-    dataset: pd.DataFrame,
-    period_name: str,
-) -> None:
-    print()
-    print(f"Direction breakdown: {period_name}")
-    rows = []
-    for direction in ("UP", "DOWN"):
-        for horizon in (20, 40, 80):
-            subset = dataset[
-                (dataset["direction"] == direction)
-                & (dataset["horizon_after_trigger"] == horizon)
-            ]
-            summary = summarize(
-                subset,
-                f"{direction}_h{horizon}",
-            )
-            rows.append(summary)
-
-    print(pd.DataFrame(rows).to_string(index=False))
 
 
 def main() -> None:
@@ -309,52 +307,81 @@ def main() -> None:
         "--output",
         type=Path,
         default=Path(
-            "data/research/xauusd_m30_fvg_trigger_research.csv"
+            "data/research/xauusd_m30_fvg_trigger_economic.csv"
         ),
     )
     args = parser.parse_args()
 
     frame = load_mt5_csv(args.csv)
-    dataset = build_dataset(frame)
+    triggers = build_trigger_dataset(frame)
 
-    development = dataset[dataset["setup_timestamp"] < "2026-03-18"].copy()
-    historical = dataset[dataset["setup_timestamp"] >= "2026-03-18"].copy()
+    if triggers.empty:
+        print("No matching FVG triggers.")
+        return
 
+    triggers["period"] = triggers["setup_timestamp"].map(
+        lambda value: "development" if value < "2026-03-18" else "historical_oos"
+    )
+
+    rows = []
+    for _, trigger in triggers.iterrows():
+        for horizon in HORIZONS:
+            outcome, realized_r, exit_index = evaluate_trade(
+                trigger,
+                frame,
+                horizon,
+            )
+            rows.append(
+                {
+                    **trigger.to_dict(),
+                    "horizon": horizon,
+                    "outcome": outcome,
+                    "realized_r": realized_r,
+                    "exit_index": exit_index,
+                }
+            )
+
+    dataset = pd.DataFrame(rows)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     dataset.to_csv(args.output, index=False)
 
-    print("=== Trend + Valid Swing + Loose FVG First Touch -> Opposite Color Trigger ===")
-    print("Horizons after trigger: 5, 10, 20, 40, 80")
-    print(
-        "Matching FVG triggers:",
-        dataset["setup_index"].nunique() if not dataset.empty else 0,
-    )
+    print("=== Simple FVG Trigger Economic Setup ===")
+    print("Entry: trigger close")
+    print("SL: 1R | TP: 2R")
+    print("Horizon: 40 / 80 M30 candles")
+    print("Matching triggers:", len(triggers))
     print()
+    print(
+        pd.DataFrame(
+            [
+                summarize_economic(dataset, frame, period, horizon)
+                for period in ("development", "historical_oos")
+                for horizon in HORIZONS
+            ]
+        ).to_string(index=False)
+    )
 
-    rows = []
-    for horizon in HORIZONS:
-        for period, group in (
-            ("development", development),
-            ("historical_oos", historical),
-        ):
-            subset = group[group["horizon_after_trigger"] == horizon]
-            rows.append(summarize(subset, f"{period}_h{horizon}"))
+    print()
+    print("Direction breakdown:")
+    direction_rows = []
+    for period in ("development", "historical_oos"):
+        for direction in ("UP", "DOWN"):
+            for horizon in HORIZONS:
+                subset = dataset[
+                    (dataset["period"] == period)
+                    & (dataset["direction"] == direction)
+                    & (dataset["horizon"] == horizon)
+                ]
+                summary = summarize_economic(
+                    subset,
+                    frame,
+                    period,
+                    horizon,
+                )
+                summary["direction"] = direction
+                direction_rows.append(summary)
 
-    print(pd.DataFrame(rows).to_string(index=False))
-
-    print_direction_breakdown(development, "development")
-    print_direction_breakdown(historical, "historical_oos")
-
-    if not dataset.empty:
-        print()
-        print("Trigger timing:")
-        print(
-            dataset[["setup_index", "bars_to_touch", "bars_touch_to_trigger"]]
-            .drop_duplicates("setup_index")
-            .describe()
-            .to_string()
-        )
-
+    print(pd.DataFrame(direction_rows).to_string(index=False))
     print()
     print("Artifact:", args.output)
 
