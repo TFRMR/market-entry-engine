@@ -243,7 +243,7 @@ def main() -> None:
         print("No matching setups.")
     else:
         direction_frames = []
-        for (horizon in HORIZONS):
+        for horizon in HORIZONS:
             for direction in ("UP", "DOWN"):
                 group = dataset[
                     (dataset["horizon"] == horizon)
