@@ -25,7 +25,7 @@ from market_engine.structure import (
 
 HORIZONS = (10, 20, 40, 80)
 POI_BREAKDOWN_HORIZONS = (40, 80)
-POI_NAMES = ("FVG", "OB", "OBIM", "LIQUIDITY", "SR")
+POI_NAMES = ("FVG", "OB", "OBIM")
 
 POI_COLUMNS = (
     "poi_fvg_present",
@@ -253,6 +253,25 @@ def main() -> None:
                     )
 
     print(pd.DataFrame(poi_rows).to_string(index=False))
+    print()
+    print("Exclusive POI breakdown (FVG / OB / OBIM only):")
+    exclusive_rows = []
+    for horizon in POI_BREAKDOWN_HORIZONS:
+        for poi_name in POI_NAMES:
+            for name, group in (("development", development), ("historical_oos", historical)):
+                subset = group[
+                    (group["horizon"] == horizon)
+                    & group["poi"].apply(
+                        lambda value: poi_name in value.split("+")
+                        and len(set(value.split("+")).intersection(POI_NAMES)) == 1
+                    )
+                ]
+                if not subset.empty:
+                    exclusive_rows.append(
+                        summarize(subset, f"{name}_h{horizon}_{poi_name}_exclusive")
+                    )
+    print(pd.DataFrame(exclusive_rows).to_string(index=False))
+
     print()
     print(f"Artifact: {args.output}")
 
