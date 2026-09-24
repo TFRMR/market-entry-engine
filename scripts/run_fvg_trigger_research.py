@@ -9,7 +9,7 @@ Scenario:
        becomes the trigger
     -> entry at trigger close
     -> SL = 1R from trigger to structural invalidation
-    -> TP = 2R
+    -> sweep TP = 1R / 1.5R / 2R / 3R
     -> evaluate first barrier within 40/80 M30 candles.
 
 The FVG candidate scope is intentionally loose: it does not require the FVG
@@ -44,7 +44,7 @@ from market_engine.structure import (
 
 
 HORIZONS = (40, 80)
-TP_R = 2.0
+TP_R_VALUES = (1.0, 1.5, 2.0, 3.0)
 SL_R = 1.0
 
 
@@ -212,6 +212,7 @@ def evaluate_trade(
     row: pd.Series,
     frame: pd.DataFrame,
     horizon: int,
+    tp_r: float,
 ) -> tuple[str, float | None, int | None]:
     trigger_index = int(row["trigger_index"])
     entry = float(row["trigger_entry"])
@@ -219,10 +220,10 @@ def evaluate_trade(
     direction = row["direction"]
 
     if direction == "UP":
-        tp = entry + TP_R * risk
+        tp = entry + tp_r * risk
         sl = entry - SL_R * risk
     else:
-        tp = entry - TP_R * risk
+        tp = entry - tp_r * risk
         sl = entry + SL_R * risk
 
     end = min(trigger_index + horizon, len(frame) - 1)
@@ -241,7 +242,7 @@ def evaluate_trade(
         if hit_tp and hit_sl:
             return "AMBIGUOUS", None, position
         if hit_tp:
-            return "TP_FIRST", TP_R, position
+            return "TP_FIRST", tp_r, position
         if hit_sl:
             return "SL_FIRST", -SL_R, position
 
@@ -250,13 +251,14 @@ def evaluate_trade(
 
 def summarize_economic(
     dataset: pd.DataFrame,
-    frame: pd.DataFrame,
     period: str,
     horizon: int,
+    tp_r: float,
 ) -> dict:
     subset = dataset[
         (dataset["period"] == period)
         & (dataset["horizon"] == horizon)
+        & (dataset["tp_r"] == tp_r)
     ].copy()
 
     n = len(subset)
@@ -264,6 +266,7 @@ def summarize_economic(
         return {
             "period": period,
             "horizon": horizon,
+            "tp_r": tp_r,
             "n": 0,
             "TP_FIRST": 0,
             "SL_FIRST": 0,
@@ -281,13 +284,12 @@ def summarize_economic(
     ambiguous = int(counts.get("AMBIGUOUS", 0))
     unresolved = int(counts.get("UNRESOLVED", 0))
 
-    # Ambiguous trades are excluded from the economic expectation rather than
-    # assigning an arbitrary winner.
     resolved = tp + sl
-    net_r = tp * TP_R - sl * SL_R
+    net_r = tp * tp_r - sl * SL_R
     return {
         "period": period,
         "horizon": horizon,
+        "tp_r": tp_r,
         "n": n,
         "TP_FIRST": tp,
         "SL_FIRST": sl,
@@ -307,7 +309,7 @@ def main() -> None:
         "--output",
         type=Path,
         default=Path(
-            "data/research/xauusd_m30_fvg_trigger_economic.csv"
+            "data/research/xauusd_m30_fvg_trigger_economic_tp_grid.csv"
         ),
     )
     args = parser.parse_args()
@@ -321,43 +323,49 @@ def main() -> None:
 
     boundary = pd.Timestamp("2026-03-18")
     triggers["period"] = triggers["setup_timestamp"].map(
-        lambda value: "development" if pd.Timestamp(value) < boundary else "historical_oos"
+        lambda value: "development"
+        if pd.Timestamp(value) < boundary
+        else "historical_oos"
     )
 
     rows = []
     for _, trigger in triggers.iterrows():
         for horizon in HORIZONS:
-            outcome, realized_r, exit_index = evaluate_trade(
-                trigger,
-                frame,
-                horizon,
-            )
-            rows.append(
-                {
-                    **trigger.to_dict(),
-                    "horizon": horizon,
-                    "outcome": outcome,
-                    "realized_r": realized_r,
-                    "exit_index": exit_index,
-                }
-            )
+            for tp_r in TP_R_VALUES:
+                outcome, realized_r, exit_index = evaluate_trade(
+                    trigger,
+                    frame,
+                    horizon,
+                    tp_r,
+                )
+                rows.append(
+                    {
+                        **trigger.to_dict(),
+                        "horizon": horizon,
+                        "tp_r": tp_r,
+                        "outcome": outcome,
+                        "realized_r": realized_r,
+                        "exit_index": exit_index,
+                    }
+                )
 
     dataset = pd.DataFrame(rows)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     dataset.to_csv(args.output, index=False)
 
-    print("=== Simple FVG Trigger Economic Setup ===")
+    print("=== Simple FVG Trigger Economic TP Grid ===")
     print("Entry: trigger close")
-    print("SL: 1R | TP: 2R")
+    print("SL: 1R | TP: 1R / 1.5R / 2R / 3R")
     print("Horizon: 40 / 80 M30 candles")
     print("Matching triggers:", len(triggers))
     print()
     print(
         pd.DataFrame(
             [
-                summarize_economic(dataset, frame, period, horizon)
+                summarize_economic(dataset, period, horizon, tp_r)
                 for period in ("development", "historical_oos")
                 for horizon in HORIZONS
+                for tp_r in TP_R_VALUES
             ]
         ).to_string(index=False)
     )
@@ -368,19 +376,21 @@ def main() -> None:
     for period in ("development", "historical_oos"):
         for direction in ("UP", "DOWN"):
             for horizon in HORIZONS:
-                subset = dataset[
-                    (dataset["period"] == period)
-                    & (dataset["direction"] == direction)
-                    & (dataset["horizon"] == horizon)
-                ]
-                summary = summarize_economic(
-                    subset,
-                    frame,
-                    period,
-                    horizon,
-                )
-                summary["direction"] = direction
-                direction_rows.append(summary)
+                for tp_r in TP_R_VALUES:
+                    subset = dataset[
+                        (dataset["period"] == period)
+                        & (dataset["direction"] == direction)
+                        & (dataset["horizon"] == horizon)
+                        & (dataset["tp_r"] == tp_r)
+                    ]
+                    summary = summarize_economic(
+                        subset,
+                        period,
+                        horizon,
+                        tp_r,
+                    )
+                    summary["direction"] = direction
+                    direction_rows.append(summary)
 
     print(pd.DataFrame(direction_rows).to_string(index=False))
     print()
