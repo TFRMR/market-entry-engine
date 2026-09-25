@@ -62,7 +62,9 @@ def main() -> None:
     lookup = episode[
         key + ["state"]
     ].rename(columns={"state": "next2_state"})
-    lookup["episode_index"] = lookup["episode_index"] - 1
+    # Current episode i -> following episode i+1 is already represented by
+    # next_state. For the second transition, join state(i+2).
+    lookup["episode_index"] = lookup["episode_index"] - 2
 
     chain = episode.merge(lookup, on=next_key, how="left")
     chain = chain[chain["next_state"].notna()].copy()
