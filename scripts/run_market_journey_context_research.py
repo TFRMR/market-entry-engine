@@ -18,92 +18,60 @@ import pandas as pd
 
 from market_engine.data import load_mt5_csv
 from market_engine.poi import POIType, build_poi_records
-from market_engine.order_block import find_order_block_candidates
 from market_engine.structure import (
-    Direction,
     build_structural_sequence,
-    process_structural_candles_with_context,
 )
+from run_market_journey_episode import build_candidates
 
 HORIZON = 40
 MIN_GROUP_N = 30
 
 
 def build_context(frame: pd.DataFrame) -> pd.DataFrame:
+    # Reuse the exact candidate construction/order from the episode research
+    # so candidate_id remains aligned point-for-point.
+    candidates, events = build_candidates(frame)
     structural = build_structural_sequence(frame)
-    swings, events, _ = process_structural_candles_with_context(structural)
+    swings, _events, _ = __import__(
+        "market_engine.structure",
+        fromlist=["process_structural_candles_with_context"],
+    ).process_structural_candles_with_context(structural)
+
+    from market_engine.poi import build_poi_records
+    from market_engine.order_block import find_order_block_candidates
+
     order_blocks = find_order_block_candidates(swings, events)
     pois = build_poi_records(frame, swings, events, order_blocks)
     fvgs = [p for p in pois if p.poi_type is POIType.FVG]
 
     rows = []
-    used = set()
+    for candidate_id, candidate in candidates.iterrows():
+        direction = Direction.UP if candidate["direction"] == "UP" else Direction.DOWN
+        entry_index = int(candidate["entry_index"])
+        bos_index = int(candidate["bos_index"])
 
-    for event in events:
-        if event.event not in {"BULLISH_BOS", "BEARISH_BOS"}:
-            continue
-
-        direction = Direction.UP if event.event == "BULLISH_BOS" else Direction.DOWN
-        wanted = (
-            __import__("market_engine.structure", fromlist=["SwingType"]).SwingType.LOW
-            if direction is Direction.UP
-            else __import__("market_engine.structure", fromlist=["SwingType"]).SwingType.HIGH
+        bos_event = next(
+            event for event in events
+            if event.index == bos_index
+            and event.event in {"BULLISH_BOS", "BEARISH_BOS"}
         )
-        future = [
-            swing for swing in swings
-            if swing.confirmation_index > event.index
-            and swing.swing_type is wanted
-        ]
-        if not future:
-            continue
-
-        swing = min(future, key=lambda item: item.confirmation_index)
-        cidx = swing.confirmation_index
-        key = (event.index, cidx)
-        if key in used:
-            continue
-        used.add(key)
-
-        confirmation = float(frame.iloc[cidx]["close"])
-        invalidation = float(swing.price)
-        leg = (
-            confirmation - invalidation
-            if direction is Direction.UP
-            else invalidation - confirmation
-        )
-        if leg <= 0:
-            continue
-
-        entry = (
-            confirmation - 0.50 * leg
-            if direction is Direction.UP
-            else confirmation + 0.50 * leg
-        )
-
-        entry_index = None
-        for index in range(cidx + 1, len(frame)):
-            candle = frame.iloc[index]
-            if direction is Direction.UP and float(candle["low"]) <= entry:
-                entry_index = index
-                break
-            if direction is Direction.DOWN and float(candle["high"]) >= entry:
-                entry_index = index
-                break
-        if entry_index is None:
-            continue
 
         directional = [
             fvg for fvg in fvgs
             if fvg.direction is direction
             and fvg.created_index <= entry_index
         ]
-        latest_fvg = max(directional, key=lambda item: item.created_index) if directional else None
+        latest_fvg = (
+            max(directional, key=lambda item: item.created_index)
+            if directional else None
+        )
 
         if latest_fvg is None:
             fvg_relation = "NONE"
             fvg_age = None
         else:
             fvg_age = entry_index - latest_fvg.created_index
+            entry = float(candidate["entry"])
             if latest_fvg.low <= entry <= latest_fvg.high:
                 fvg_relation = "INSIDE"
             elif direction is Direction.UP:
@@ -112,11 +80,10 @@ def build_context(frame: pd.DataFrame) -> pd.DataFrame:
                 fvg_relation = "BELOW" if entry < latest_fvg.low else "ABOVE"
 
         rows.append({
-            "candidate_id": len(rows),
-            "bos_index": event.index,
-            "bos_scope": event.scope.value,
-            "direction": direction.value,
-            "confirmation_index": cidx,
+            "candidate_id": int(candidate_id),
+            "bos_scope": bos_event.scope.value,
+            "direction": candidate["direction"],
+            "confirmation_index": int(candidate["confirmation_index"]),
             "entry_index": entry_index,
             "fvg_relation_at_entry": fvg_relation,
             "fvg_age_bars": fvg_age,
