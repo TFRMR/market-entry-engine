@@ -217,12 +217,18 @@ def build_episodes(candidate, frame, events, horizon):
         next_episode = episodes[episode_index + 1] if episode_index + 1 < len(episodes) else None
 
         state_start = entry_index + int(episode["start_bar"])
-        state_end = entry_index + int(
-            next_episode["start_bar"] if next_episode is not None else min(episode["end_bar"] + 1, horizon)
-        )
 
-        if next_episode is None:
+        if next_episode is not None:
+            state_end = entry_index + int(next_episode["start_bar"])
+            terminal_reason = None
+        elif episode["state"] == "INVALIDATED":
+            # INVALIDATED is a point-state: it starts and ends on the
+            # invalidation candle rather than being extended to horizon.
+            state_end = entry_index + int(episode["end_bar"])
+            terminal_reason = "INVALIDATION"
+        else:
             state_end = min(entry_index + horizon, len(frame) - 1)
+            terminal_reason = "HORIZON_END"
 
         mfe_r, mae_r = excursion(
             frame,
@@ -233,11 +239,7 @@ def build_episodes(candidate, frame, events, horizon):
             risk,
         )
 
-        duration = (
-            next_episode["start_bar"] - episode["start_bar"]
-            if next_episode is not None
-            else state_end - episode["start_bar"]
-        )
+        duration = state_end - state_start
 
         rows.append({
             "episode_index": episode_index,
@@ -261,13 +263,9 @@ def build_episodes(candidate, frame, events, horizon):
             ),
             "mfe_r_during_episode": mfe_r,
             "mae_r_during_episode": mae_r,
-            "terminal_reason": (
-                "HORIZON_END"
-                if next_episode is None and episode["state"] != "INVALIDATED"
-                else "INVALIDATION"
-                if next_episode is None
-                else None
-            ),
+            "terminal_reason": terminal_reason,
+            "hit_1r_during_episode": float(mfe_r >= 1.0),
+            "hit_2r_during_episode": float(mfe_r >= 2.0),
         })
 
     return rows
@@ -344,6 +342,8 @@ def main():
                         duration_p75=("duration_bars", lambda s: s.quantile(0.75)),
                         mfe_r_median=("mfe_r_during_episode", "median"),
                         mae_r_median=("mae_r_during_episode", "median"),
+                        p_hit_1r=("hit_1r_during_episode", "mean"),
+                        p_hit_2r=("hit_2r_during_episode", "mean"),
                     )
                     .reset_index()
                 )
