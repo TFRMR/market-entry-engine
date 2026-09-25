@@ -1,8 +1,7 @@
-"""Validate Market Journey empirical probabilities across chronological folds.
+"""Validate Market Journey empirical probabilities across chronological OOS folds.
 
-This is a descriptive time-series stability check. It does not train a model,
-rank states, or produce trading signals. Candidate IDs are treated as
-chronological order because the episode dataset preserves source order.
+Historical OOS candidates are split into five chronological sub-folds inside
+the OOS period itself. This is a descriptive stability check only.
 """
 
 from __future__ import annotations
@@ -13,34 +12,33 @@ from pathlib import Path
 import pandas as pd
 
 HORIZON = 40
-STATES = ("ENTRY", "SWING_UPDATE", "CONTINUATION", "TRANSITION", "INVALIDATED")
 FOLDS = 5
+STATES = ("ENTRY", "SWING_UPDATE", "CONTINUATION", "TRANSITION")
 
 
-def assign_folds(frame: pd.DataFrame, n_folds: int) -> pd.DataFrame:
-    ids = sorted(frame["candidate_id"].dropna().unique())
+def assign_oos_folds(frame: pd.DataFrame, n_folds: int) -> pd.DataFrame:
+    oos = frame[frame["period"] == "historical_oos"]
+    ids = sorted(oos["candidate_id"].dropna().unique())
     if len(ids) < n_folds:
-        raise ValueError(f"Need at least {n_folds} candidates, got {len(ids)}")
+        raise ValueError(f"Need at least {n_folds} OOS candidates, got {len(ids)}")
 
-    fold_map = {}
-    for i, candidate_id in enumerate(ids):
-        fold_map[candidate_id] = min((i * n_folds) // len(ids), n_folds - 1)
-
+    fold_map = {
+        candidate_id: min((i * n_folds) // len(ids), n_folds - 1)
+        for i, candidate_id in enumerate(ids)
+    }
     out = frame.copy()
-    out["fold"] = out["candidate_id"].map(fold_map).astype(int) + 1
+    out["oos_fold"] = out["candidate_id"].map(fold_map)
     return out
 
 
 def transition_rows(subset: pd.DataFrame) -> list[dict]:
-    observed = subset[subset["next_state"].notna()].copy()
-    rows: list[dict] = []
-
-    for state in ("ENTRY", "SWING_UPDATE", "CONTINUATION", "TRANSITION"):
+    observed = subset[subset["next_state"].notna()]
+    rows = []
+    for state in STATES:
         state_rows = observed[observed["state"] == state]
         denominator = len(state_rows)
         if denominator == 0:
             continue
-
         for outcome, group in state_rows.groupby("next_state"):
             rows.append({
                 "section": "NEXT_STATE",
@@ -49,72 +47,37 @@ def transition_rows(subset: pd.DataFrame) -> list[dict]:
                 "n": len(group),
                 "denominator": denominator,
                 "probability": len(group) / denominator,
-                "duration_median": group["bars_to_next_state"].median(),
             })
-
-    return rows
-
-
-def state_rows(subset: pd.DataFrame) -> list[dict]:
-    rows: list[dict] = []
-    for state, group in subset.groupby("state"):
-        rows.append({
-            "section": "STATE_OUTCOME",
-            "state": state,
-            "outcome": None,
-            "n": len(group),
-            "p_hit_1r": group["hit_1r_during_episode"].mean(),
-            "p_hit_2r": group["hit_2r_during_episode"].mean(),
-            "duration_median": group["duration_bars"].median(),
-        })
     return rows
 
 
 def build_validation(frame: pd.DataFrame, n_folds: int) -> pd.DataFrame:
-    rows: list[dict] = []
-    frame = assign_folds(frame, n_folds)
-
-    for period in ("historical_oos",):
-        for direction in ("UP", "DOWN"):
-            for fold in range(1, n_folds + 1):
-                subset = frame[
-                    (frame["period"] == period)
-                    & (frame["direction"] == direction)
-                    & (frame["horizon"] == HORIZON)
-                    & (frame["fold"] == fold)
-                ]
-                if subset.empty:
-                    continue
-
-                candidate_count = subset["candidate_id"].nunique()
-                base = {
-                    "period": period,
-                    "direction": direction,
-                    "horizon": HORIZON,
-                    "fold": fold,
-                    "candidate_count": candidate_count,
-                }
-
-                for row in transition_rows(subset):
-                    rows.append({**base, **row})
-
-                for row in state_rows(subset):
-                    rows.append({**base, **row})
-
+    frame = assign_oos_folds(frame, n_folds)
+    rows = []
+    for direction in ("UP", "DOWN"):
+        for fold in range(n_folds):
+            subset = frame[
+                (frame["period"] == "historical_oos")
+                & (frame["direction"] == direction)
+                & (frame["horizon"] == HORIZON)
+                & (frame["oos_fold"] == fold)
+            ]
+            if subset.empty:
+                continue
+            base = {
+                "period": "historical_oos",
+                "direction": direction,
+                "horizon": HORIZON,
+                "fold": fold + 1,
+                "candidate_count": subset["candidate_id"].nunique(),
+            }
+            rows.extend({**base, **row} for row in transition_rows(subset))
     return pd.DataFrame(rows)
 
 
-def add_stability_summary(validation: pd.DataFrame) -> pd.DataFrame:
-    transitions = validation[
-        (validation["section"] == "NEXT_STATE")
-        & validation["state"].isin(["ENTRY", "SWING_UPDATE"])
-    ].copy()
-
-    if transitions.empty:
-        return pd.DataFrame()
-
+def add_summary(validation: pd.DataFrame) -> pd.DataFrame:
     rows = []
-    for (direction, state, outcome), group in transitions.groupby(
+    for (direction, state, outcome), group in validation.groupby(
         ["direction", "state", "outcome"]
     ):
         rows.append({
@@ -122,56 +85,37 @@ def add_stability_summary(validation: pd.DataFrame) -> pd.DataFrame:
             "state": state,
             "outcome": outcome,
             "folds_observed": len(group),
+            "n_total": group["n"].sum(),
             "probability_mean": group["probability"].mean(),
             "probability_std": group["probability"].std(ddof=0),
             "probability_min": group["probability"].min(),
             "probability_max": group["probability"].max(),
             "probability_range": group["probability"].max() - group["probability"].min(),
-            "n_total": group["n"].sum(),
         })
-
     return pd.DataFrame(rows)
 
 
-def print_validation(validation: pd.DataFrame, summary: pd.DataFrame) -> None:
+def print_report(validation: pd.DataFrame, summary: pd.DataFrame) -> None:
     print("=== Market Journey Chronological Stability Validation ===")
-    print("Historical OOS only; H40; 5 chronological folds")
+    print("Historical OOS only; H40; 5 chronological folds within OOS")
     print()
-
     for direction in ("UP", "DOWN"):
         print(f"--- {direction} ---")
-        subset = validation[
-            (validation["direction"] == direction)
-            & (validation["section"] == "NEXT_STATE")
-            & validation["state"].isin(["ENTRY", "SWING_UPDATE"])
-        ]
-        if subset.empty:
-            continue
-        cols = ["fold", "state", "outcome", "n", "denominator", "probability"]
-        print(subset[cols].to_string(index=False))
+        subset = validation[validation["direction"] == direction]
+        if not subset.empty:
+            print(subset[
+                ["fold", "candidate_count", "state", "outcome",
+                 "n", "denominator", "probability"]
+            ].to_string(index=False))
         print()
-
+    print("--- stability summary ---")
     if not summary.empty:
-        print("--- stability summary ---")
-        print(
-            summary[
-                [
-                    "direction", "state", "outcome", "folds_observed",
-                    "probability_mean", "probability_std",
-                    "probability_min", "probability_max",
-                    "probability_range", "n_total",
-                ]
-            ].to_string(index=False)
-        )
+        print(summary.to_string(index=False))
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "episodes_csv",
-        type=Path,
-        help="Episode CSV from run_market_journey_episode.py",
-    )
+    parser.add_argument("episodes_csv", type=Path)
     parser.add_argument(
         "--output",
         type=Path,
@@ -184,28 +128,20 @@ def main() -> None:
 
     frame = pd.read_csv(args.episodes_csv)
     required = {
-        "candidate_id",
-        "direction",
-        "period",
-        "horizon",
-        "state",
-        "next_state",
-        "bars_to_next_state",
-        "duration_bars",
-        "hit_1r_during_episode",
-        "hit_2r_during_episode",
+        "candidate_id", "direction", "period", "horizon", "state",
+        "next_state", "bars_to_next_state",
     }
     missing = sorted(required - set(frame.columns))
     if missing:
         raise ValueError(f"Missing required columns: {missing}")
 
     validation = build_validation(frame, args.folds)
-    summary = add_stability_summary(validation)
+    summary = add_summary(validation)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     validation.to_csv(args.output, index=False)
 
-    print_validation(validation, summary)
+    print_report(validation, summary)
     print()
     print("Episode rows:", len(frame))
     print("Validation rows:", len(validation))
