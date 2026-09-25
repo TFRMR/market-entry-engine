@@ -43,9 +43,19 @@ def main() -> None:
         (episodes["horizon"] == HORIZON)
         & episodes["state"].isin(STATES)
     ].copy()
+    # Context is candidate-level; period is derived independently here from
+    # the same confirmation boundary used by the journey dataset.
+    boundary = pd.Timestamp("2026-03-18")
+    context = context.copy()
+    context["confirmation_timestamp"] = context["confirmation_index"].map(
+        lambda i: frame.iloc[int(i)]["timestamp"]
+    )
+    context["period"] = context["confirmation_timestamp"].map(
+        lambda ts: "development" if pd.Timestamp(ts) < boundary else "historical_oos"
+    )
     episode = episode.merge(
-        context[["candidate_id", "period", "bos_scope"]],
-        on=["candidate_id", "period"],
+        context[["candidate_id", "bos_scope"]],
+        on="candidate_id",
         how="inner",
     )
 
