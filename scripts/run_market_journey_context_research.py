@@ -18,7 +18,7 @@ import pandas as pd
 
 from market_engine.data import load_mt5_csv
 from market_engine.poi import POIType, build_poi_records
-from market_engine.order_block import build_order_block_candidates
+from market_engine.order_block import find_order_block_candidates
 from market_engine.structure import (
     Direction,
     build_structural_sequence,
@@ -32,7 +32,7 @@ MIN_GROUP_N = 30
 def build_context(frame: pd.DataFrame) -> pd.DataFrame:
     structural = build_structural_sequence(frame)
     swings, events, _ = process_structural_candles_with_context(structural)
-    order_blocks = build_order_block_candidates(frame, swings, events)
+    order_blocks = find_order_block_candidates(swings, events)
     pois = build_poi_records(frame, swings, events, order_blocks)
     fvgs = [p for p in pois if p.poi_type is POIType.FVG]
 
