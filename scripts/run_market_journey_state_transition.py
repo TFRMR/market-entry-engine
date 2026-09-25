@@ -4,7 +4,7 @@ Scenario:
 BOS -> next same-direction valid swing -> 50% retracement entry.
 
 This is descriptive empirical research. It preserves raw events while adding
-a coarse state interpretation for transition analysis.
+a direction-aware state interpretation for transition analysis.
 """
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 from market_engine.data import load_mt5_csv
@@ -26,16 +25,28 @@ from market_engine.structure import (
 HORIZONS = (10, 20, 40, 80)
 RETRACE = 0.50
 
-EVENT_STATE = {
-    "ENTRY": "ENTRY",
-    "SWING_HIGH_VALID": "SWING_UPDATE",
-    "SWING_LOW_VALID": "SWING_UPDATE",
-    "BULLISH_BOS": "CONTINUATION",
-    "BEARISH_BOS": "TRANSITION",
-    "BULLISH_CHOCH": "TRANSITION",
-    "BEARISH_CHOCH": "TRANSITION",
-    "INVALIDATION": "INVALIDATED",
-}
+
+def event_state(event: str, direction: str) -> str:
+    if event == "ENTRY":
+        return "ENTRY"
+    if event in {"SWING_HIGH_VALID", "SWING_LOW_VALID"}:
+        return "SWING_UPDATE"
+    if event == "INVALIDATION":
+        return "INVALIDATED"
+
+    continuation_event = "BULLISH_BOS" if direction == "UP" else "BEARISH_BOS"
+    if event == continuation_event:
+        return "CONTINUATION"
+
+    if event in {
+        "BULLISH_BOS",
+        "BEARISH_BOS",
+        "BULLISH_CHOCH",
+        "BEARISH_CHOCH",
+    }:
+        return "TRANSITION"
+
+    raise ValueError(f"Unknown journey event: {event}")
 
 
 def build_candidates(frame):
@@ -175,10 +186,10 @@ def build_journey(candidate, frame, events, horizon):
 
         rows.append({
             "from_event": current["event"],
-            "from_state": EVENT_STATE[current["event"]],
+            "from_state": event_state(current["event"], direction),
             "from_scope": current["scope"],
             "to_event": nxt["event"],
-            "to_state": EVENT_STATE[nxt["event"]],
+            "to_state": event_state(nxt["event"], direction),
             "to_scope": nxt["scope"],
             "from_bar": current["bar"],
             "to_bar": nxt["bar"],
@@ -188,7 +199,7 @@ def build_journey(candidate, frame, events, horizon):
         })
 
     terminal = points[-1]["event"]
-    terminal_state = EVENT_STATE[terminal]
+    terminal_state = event_state(terminal, direction)
     terminal_bar = points[-1]["bar"]
 
     return rows, {
@@ -236,10 +247,7 @@ def main():
             }
             for row in transitions:
                 transition_rows.append({**base, **row})
-            terminal_rows.append({
-                **base,
-                **terminal,
-            })
+            terminal_rows.append({**base, **terminal})
 
     transitions = pd.DataFrame(transition_rows)
     terminals = pd.DataFrame(terminal_rows)
@@ -248,7 +256,7 @@ def main():
     transitions.to_csv(args.output, index=False)
 
     print("=== Market Journey State Transition Research ===")
-    print("Raw structural event -> semantic state transition")
+    print("Direction-aware semantic state transitions from raw structural events")
     print()
 
     for period in ("development", "historical_oos"):
