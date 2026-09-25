@@ -19,6 +19,7 @@ import pandas as pd
 from market_engine.data import load_mt5_csv
 from market_engine.poi import POIType, build_poi_records
 from market_engine.structure import (
+    Direction,
     build_structural_sequence,
 )
 from run_market_journey_episode import build_candidates
