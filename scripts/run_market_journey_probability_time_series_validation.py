@@ -54,12 +54,16 @@ def main() -> None:
         & episodes["state"].isin(STATES)
         & episodes["next_state"].notna()
     ].copy()
+    # The episode artifact already carries its own period label. Keep the
+    # context-derived period under a distinct name to avoid pandas suffixes.
     episode = episode.merge(
-        context[["candidate_id", "bos_scope", "period"]],
+        context[["candidate_id", "bos_scope", "period"]].rename(
+            columns={"period": "context_period"}
+        ),
         on="candidate_id",
         how="inner",
     )
-    episode = episode[episode["period"] == "historical_oos"].copy()
+    episode = episode[episode["context_period"] == "historical_oos"].copy()
 
     # Chronological candidate folds; all episodes from a candidate stay together.
     candidates = (
