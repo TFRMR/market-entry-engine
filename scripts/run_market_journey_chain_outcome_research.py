@@ -13,6 +13,7 @@ import pandas as pd
 
 from market_engine.data import load_mt5_csv
 from run_market_journey_context_research import build_context
+from run_market_journey_episode import build_candidates, excursion
 
 HORIZON = 40
 STATES = ("ENTRY", "SWING_UPDATE", "CONTINUATION", "TRANSITION")
@@ -39,6 +40,7 @@ def main() -> None:
     frame = load_mt5_csv(args.csv)
     episodes = pd.read_csv(args.episodes)
     context = build_context(frame)
+    candidates, _events = build_candidates(frame)
 
     boundary = pd.Timestamp("2026-03-18")
     context["period"] = context["confirmation_index"].map(
@@ -59,7 +61,9 @@ def main() -> None:
     episode["episode_index"] = episode["episode_index"].astype(int)
 
     key = ["candidate_id", "period", "episode_index"]
-    lookup = episode[key + ["state"]].rename(columns={"state": "next2_state"})
+    lookup = episode[key + ["state", "end_bar"]].rename(
+        columns={"state": "next2_state", "end_bar": "next2_end_bar"}
+    )
     lookup["episode_index"] -= 2
 
     chain = episode.merge(lookup, on=key, how="left")
@@ -68,6 +72,38 @@ def main() -> None:
     # Only chains with an observed following state are evaluated as a full
     # two-step chain. This avoids pretending that censored chains are outcomes.
     chain = chain[chain["next2_state"].notna()].copy()
+    candidate_lookup = candidates.reset_index().rename(columns={"index": "candidate_id"})[
+        ["candidate_id", "entry_index", "entry", "risk", "direction"]
+    ]
+    chain = chain.merge(candidate_lookup, on=["candidate_id", "direction"], how="inner")
+
+    chain["chain_start_index"] = (
+        chain["entry_index"] + chain["start_bar"].astype(int)
+    )
+    chain["chain_end_index"] = (
+        chain["entry_index"] + chain["next2_end_bar"].astype(int)
+    )
+
+    cumulative = []
+    for row in chain.itertuples(index=False):
+        mfe_r, mae_r = excursion(
+            frame,
+            int(row.chain_start_index),
+            int(row.chain_end_index),
+            row.direction,
+            float(row.entry),
+            float(row.risk),
+        )
+        cumulative.append((mfe_r, mae_r))
+
+    chain["chain_mfe_r"] = [item[0] for item in cumulative]
+    chain["chain_mae_r"] = [item[1] for item in cumulative]
+    chain["chain_duration_bars"] = (
+        chain["chain_end_index"] - chain["chain_start_index"]
+    )
+    chain["chain_hit_1r"] = (chain["chain_mfe_r"] >= 1.0).astype(float)
+    chain["chain_hit_2r"] = (chain["chain_mfe_r"] >= 2.0).astype(float)
+
     chain["chain"] = (
         chain["state"].astype(str)
         + " -> "
@@ -108,15 +144,15 @@ def main() -> None:
                     f"{state} -> {next_state} -> {next2_state}"
                 ),
                 "n": len(group),
-                "duration_median": group["duration_bars"].median(),
-                "duration_p25": group["duration_bars"].quantile(0.25),
-                "duration_p75": group["duration_bars"].quantile(0.75),
-                "mfe_r_median": group["mfe_r_during_episode"].median(),
-                "mfe_r_p75": group["mfe_r_during_episode"].quantile(0.75),
-                "mae_r_median": group["mae_r_during_episode"].median(),
-                "mae_r_p25": group["mae_r_during_episode"].quantile(0.25),
-                "p_hit_1r": group["hit_1r_during_episode"].mean(),
-                "p_hit_2r": group["hit_2r_during_episode"].mean(),
+                "duration_median": group["chain_duration_bars"].median(),
+                "duration_p25": group["chain_duration_bars"].quantile(0.25),
+                "duration_p75": group["chain_duration_bars"].quantile(0.75),
+                "mfe_r_median": group["chain_mfe_r"].median(),
+                "mfe_r_p75": group["chain_mfe_r"].quantile(0.75),
+                "mae_r_median": group["chain_mae_r"].median(),
+                "mae_r_p25": group["chain_mae_r"].quantile(0.25),
+                "p_hit_1r": group["chain_hit_1r"].mean(),
+                "p_hit_2r": group["chain_hit_2r"].mean(),
             }
         )
 
