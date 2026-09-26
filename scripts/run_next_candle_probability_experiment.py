@@ -14,7 +14,7 @@ from run_market_journey_context_research import build_context
 
 BOUNDARY = pd.Timestamp("2026-03-18")
 N_FOLDS = 5
-OUTCOMES = ("UP", "DOWN", "DOJI")
+OUTCOMES = ("DOJI", "DOWN", "UP")\nLAPLACE_ALPHA = 1.0
 
 
 def add_period(frame: pd.DataFrame, context: pd.DataFrame) -> pd.DataFrame:
