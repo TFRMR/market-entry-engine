@@ -14,8 +14,7 @@ from run_market_journey_context_research import build_context
 
 BOUNDARY = pd.Timestamp("2026-03-18")
 N_FOLDS = 5
-MIN_N = 20
-OUTCOMES = ("UP", "DOWN", "INSIDE", "OUTSIDE")
+OUTCOMES = ("UP", "DOWN", "DOJI")
 
 
 def add_period(frame: pd.DataFrame, context: pd.DataFrame) -> pd.DataFrame:
@@ -30,16 +29,12 @@ def add_period(frame: pd.DataFrame, context: pd.DataFrame) -> pd.DataFrame:
 
 
 def candle_outcome(row: pd.Series) -> str:
-    o, h, l, c = float(row.open), float(row.high), float(row.low), float(row.close)
-    if h > o and l < o and c > o:
-        return "OUTSIDE"
-    if h > o and l < o and c < o:
-        return "OUTSIDE"
-    if h > o and l <= o and c >= o:
+    o, c = float(row.open), float(row.close)
+    if c > o:
         return "UP"
-    if l < o and h >= o and c <= o:
+    if c < o:
         return "DOWN"
-    return "INSIDE"
+    return "DOJI"
 
 
 def make_folds(candidates: pd.DataFrame) -> pd.DataFrame:
@@ -115,10 +110,10 @@ def main() -> None:
         )
 
     data = pd.DataFrame(rows)
-    candidates = make_folds(
-        data[["candidate_id", "confirmation_index"]]
+    candidates = make_folds(data[["candidate_id", "confirmation_index"]])
+    data = data.merge(
+        candidates, on=["candidate_id", "confirmation_index"], how="left"
     )
-    data = data.merge(candidates, on=["candidate_id", "confirmation_index"], how="left")
 
     predictions = []
     for fold in range(2, N_FOLDS + 1):
@@ -141,11 +136,11 @@ def main() -> None:
 
     pred = pd.DataFrame(predictions)
     summary = []
+    labels = list(OUTCOMES)
+    idx = {x: i for i, x in enumerate(labels)}
     for fold, g in pred.groupby("fold"):
         p = g[[f"p_{x.lower()}" for x in OUTCOMES]].to_numpy()
         y = g.actual.to_numpy()
-        labels = list(OUTCOMES)
-        idx = {x: i for i, x in enumerate(labels)}
         yi = np.array([idx[x] for x in y])
         brier = np.mean(np.sum((p - np.eye(len(labels))[yi]) ** 2, axis=1))
         ll = log_loss(y, p, labels=labels)
@@ -174,7 +169,11 @@ def main() -> None:
     print(result[["brier_score", "log_loss", "argmax_accuracy"]].mean().to_string())
     print()
     print("Observed next-candle distribution:")
-    print(data.next_candle.value_counts(normalize=True).reindex(OUTCOMES, fill_value=0).to_string())
+    print(
+        data.next_candle.value_counts(normalize=True)
+        .reindex(OUTCOMES, fill_value=0)
+        .to_string()
+    )
     print("Candidates:", len(data))
     print("Predictions:", len(pred))
     print("Artifact:", args.output)
