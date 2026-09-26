@@ -183,7 +183,7 @@ def main() -> None:
         y_idx = np.array([labels[v] for v in y])
 
         brier = np.mean(np.sum((probs - np.eye(len(NEXT_STATES))[y_idx]) ** 2, axis=1))
-        ll = log_loss(y, probs, labels=list(NEXT_STATES))
+        ll = log_loss(y, probs, labels=list(NEXT_STATES), normalize=True)
         accuracy = np.mean(
             wide[ list(NEXT_STATES) ].to_numpy().argmax(axis=1)
             == y_idx
