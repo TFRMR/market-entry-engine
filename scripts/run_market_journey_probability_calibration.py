@@ -126,6 +126,11 @@ def main() -> None:
         how="inner",
     )
     episode = episode[episode["context_period"] == "historical_oos"].copy()
+    episode = episode.merge(
+        context[["candidate_id", "confirmation_index"]].drop_duplicates("candidate_id"),
+        on="candidate_id",
+        how="left",
+    )
     episode = make_folds(episode)
 
     predictions: list[dict] = []
